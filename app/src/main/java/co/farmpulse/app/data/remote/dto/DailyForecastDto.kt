@@ -11,8 +11,7 @@ data class DailyForecastDto(
     @SerializedName("sunset") val sunset: String? = null,
     @SerializedName("condition_code") val conditionCode: String? = null,
     @SerializedName("icon") val icon: String? = null,
-    @SerializedName("precipitation_probability") val precipitationProbability: Int? = null,
+    @SerializedName("precipitation_probability") val precipitationProbability: Double? = null,
     @SerializedName("wind_max") val windMax: Double? = null,
     @SerializedName("icon_path") val iconPath: String? = null
 )
-
