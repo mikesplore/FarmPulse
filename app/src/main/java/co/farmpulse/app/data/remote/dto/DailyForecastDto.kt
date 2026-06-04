@@ -3,16 +3,16 @@ package co.farmpulse.app.data.remote.dto
 import com.google.gson.annotations.SerializedName
 
 data class DailyForecastDto(
-    val date: String?,
-    val temp_min: Double?,
-    val temp_max: Double?,
-    val precipitation_sum: Double?,
-    val sunrise: String?,
-    val sunset: String?,
-    val condition_code: String?,
-    val icon: String?,
-    val precipitation_probability: Int?,
-    val wind_max: Double?,
-    val icon_path: String?
+    @SerializedName("date") val date: String? = null,
+    @SerializedName("temp_min") val tempMin: Double? = null,
+    @SerializedName("temp_max") val tempMax: Double? = null,
+    @SerializedName("precipitation_sum") val precipitationSum: Double? = null,
+    @SerializedName("sunrise") val sunrise: String? = null,
+    @SerializedName("sunset") val sunset: String? = null,
+    @SerializedName("condition_code") val conditionCode: String? = null,
+    @SerializedName("icon") val icon: String? = null,
+    @SerializedName("precipitation_probability") val precipitationProbability: Int? = null,
+    @SerializedName("wind_max") val windMax: Double? = null,
+    @SerializedName("icon_path") val iconPath: String? = null
 )
 

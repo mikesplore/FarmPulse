@@ -3,12 +3,12 @@ package co.farmpulse.app.data.remote.dto
 import com.google.gson.annotations.SerializedName
 
 data class CurrentWeatherDto(
-    val time: String?,
-    val temperature: Double?,
-    val wind_speed: Double?,
-    val wind_direction: Int?,
-    val condition_code: String?,
-    val icon: String?,
-    val icon_path: String?
+    @SerializedName("time") val time: String? = null,
+    @SerializedName("temperature") val temperature: Double? = null,
+    @SerializedName("wind_speed") val windSpeed: Double? = null,
+    @SerializedName("wind_direction") val windDirection: Int? = null,
+    @SerializedName("condition_code") val conditionCode: String? = null,
+    @SerializedName("icon") val icon: String? = null,
+    @SerializedName("icon_path") val iconPath: String? = null
 )
 
