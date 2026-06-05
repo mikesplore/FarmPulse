@@ -78,7 +78,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val prefs = prefsRepository.userPreferencesFlow.first()
             
-            // Only show full loading if we have no data and it's not a pull-to-refresh
             val showFullLoading = !isPullToRefresh && _uiState.value.current == null
             
             _uiState.value = _uiState.value.copy(
@@ -88,7 +87,6 @@ class HomeViewModel @Inject constructor(
                 isApiKeyMissing = prefs.apiKey.isBlank()
             )
 
-            // Location Logic: Try overrides -> then last known -> then GPS if requested
             var lat: Double? = prefs.latOverride.toDoubleOrNull() ?: prefs.lastLat
             var lon: Double? = prefs.lonOverride.toDoubleOrNull() ?: prefs.lastLon
 
@@ -97,7 +95,7 @@ class HomeViewModel @Inject constructor(
                 if (location != null) {
                     lat = location.latitude
                     lon = location.longitude
-                    Log.i("HomeViewModel", "Found location: $lat, $lon. Persisting.")
+                    Log.i("HomeViewModel", "Using precise location: $lat, $lon")
                     prefsRepository.updateLastKnownLocation(lat, lon)
                 }
             }
@@ -115,10 +113,13 @@ class HomeViewModel @Inject constructor(
                 if (value != null) {
                     val response = value.response
                     
-                    val city = prefs.cityOverride.ifBlank {
-                        response.ipGeo?.city ?: response.location?.country ?: "Unknown"
+                    // Display the client-side Geocoded info (exact city and region)
+                    val city = if (prefs.cityOverride.isNotBlank()) prefs.cityOverride else {
+                        value.discoveredCity ?: "Unknown"
                     }
-                    val region = response.ipGeo?.region ?: ""
+                    val region = if (prefs.cityOverride.isNotBlank()) "" else {
+                        value.discoveredRegion ?: ""
+                    }
                     
                     val nowHour = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0)
                     val filteredHourly = (response.hourly ?: emptyList()).filter { hour ->
@@ -130,7 +131,6 @@ class HomeViewModel @Inject constructor(
                         }
                     }
 
-                    // PERSISTENCE FIX: Store coordinates discovered (via IP or otherwise) if no manual override
                     if (prefs.latOverride.isBlank() && prefs.lonOverride.isBlank()) {
                         val discLat = response.location?.lat ?: response.ipGeo?.lat
                         val discLon = response.location?.lon ?: response.ipGeo?.lon

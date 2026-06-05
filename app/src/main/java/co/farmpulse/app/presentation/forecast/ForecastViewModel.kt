@@ -60,7 +60,6 @@ class ForecastViewModel @Inject constructor(
                     aiEnabled = prefs.aiEnabled,
                     isApiKeyMissing = prefs.apiKey.isBlank()
                 )
-                // Removed automatic loadForecast() on preference change to prevent loops/unwanted refreshes
             }
         }
     }
@@ -99,8 +98,9 @@ class ForecastViewModel @Inject constructor(
             
             if (res.isSuccess) {
                 val v = res.getOrNull()
+                // Use the geocoded city from the client device (via repository)
                 val city = if (prefs.cityOverride.isNotBlank()) prefs.cityOverride else {
-                    v?.response?.ipGeo?.city ?: v?.response?.location?.country ?: "Unknown"
+                    v?.discoveredCity ?: v?.response?.ipGeo?.city ?: v?.response?.location?.country ?: "Unknown"
                 }
                 val region = v?.response?.ipGeo?.region ?: ""
                 val label = if (region.isNotBlank() && prefs.cityOverride.isBlank()) "$city, $region" else city

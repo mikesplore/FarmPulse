@@ -1,22 +1,24 @@
 package co.farmpulse.app.presentation.history
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Park
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.domain.model.TreeAnalysisResult
+import co.farmpulse.app.presentation.components.LoadingOverlay
 import co.farmpulse.app.ui.theme.*
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
@@ -44,6 +47,7 @@ fun HistoryScreen(
     onNewScan: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     
     // Group items by date for a better UX
     val groupedItems = remember(state.items) {
@@ -55,58 +59,98 @@ fun HistoryScreen(
         }.toSortedMap(compareByDescending { it })
     }
 
-    PullToRefreshBox(
-        isRefreshing = state.isLoading,
-        onRefresh = { viewModel.refreshHistory() },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Column(
+    // Show snackbar if API Key is missing
+    LaunchedEffect(state.isApiKeyMissing) {
+        if (state.isApiKeyMissing) {
+            snackbarHostState.showSnackbar(
+                message = "Please add your API key in the settings page",
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refreshHistory() },
             modifier = Modifier
                 .fillMaxSize()
-                .background(BackgroundOffWhite)
+                .padding(paddingValues)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "Scan history",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = OnSurfaceCharcoal,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-            
-            Text(
-                text = "${state.items.size} analyses total",
-                fontSize = 13.sp,
-                color = SecondaryText,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-            )
-
-            if (state.items.isEmpty() && !state.isLoading) {
-                EmptyHistory(onNewScan)
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    groupedItems.forEach { (date, items) ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BackgroundOffWhite)
+            ) {
+                if (state.items.isEmpty() && !state.isLoading) {
+                    // Wrap in a scrollable column so Pull-To-Refresh works even when empty
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        HistoryHeader(count = 0)
+                        EmptyHistory(onNewScan)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                         item {
-                            DateHeader(date)
+                            HistoryHeader(count = state.items.size)
                         }
-                        items(items) { item ->
-                            HistoryCard(item, onClick = { onNavigateToResult(item) })
+                        
+                        groupedItems.forEach { (date, items) ->
+                            item {
+                                DateHeader(date)
+                            }
+                            items(items) { item ->
+                                HistoryCard(item, onClick = { onNavigateToResult(item) })
+                            }
+                        }
+                        
+                        item {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            QuotaFooter(remaining = 3, onNewScan = onNewScan)
+                            Spacer(modifier = Modifier.height(80.dp))
                         }
                     }
-                    
-                    item {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        QuotaFooter(remaining = 3, onNewScan = onNewScan)
-                        Spacer(modifier = Modifier.height(80.dp))
-                    }
+                }
+
+                // Initial Loading Overlay
+                AnimatedVisibility(
+                    visible = state.isLoading && state.items.isEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    LoadingOverlay("Syncing scan history...")
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HistoryHeader(count: Int) {
+    Column(modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)) {
+        Text(
+            text = "Scan history",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = OnSurfaceCharcoal,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+        
+        Text(
+            text = "$count analyses total",
+            fontSize = 13.sp,
+            color = SecondaryText,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -265,7 +309,9 @@ private fun QuotaFooter(remaining: Int, onNewScan: () -> Unit) {
 @Composable
 private fun EmptyHistory(onNewScan: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp, vertical = 60.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

@@ -27,8 +27,12 @@ class WeatherRepository @Inject constructor(
 
     data class WeatherResponseWithMeta(
         val response: WeatherGeoResponse,
+        val discoveredCity: String? = null,
+        val discoveredRegion: String? = null,
         val cachedAt: Long? = null
     )
+
+    data class GeoInfo(val city: String?, val region: String?)
 
     suspend fun getFullWeather(
         lat: Double? = null,
@@ -44,34 +48,33 @@ class WeatherRepository @Inject constructor(
                 var response: WeatherGeoResponse
                 
                 if (lat != null && lon != null) {
-                    // 1a. Directly call /weather if we have coordinates
                     response = api.getWeather(lat = lat, lon = lon, ai = ai, lang = lang, units = units)
                 } else {
-                    // 1b. Call /weather-geo by IP first to get coordinates
                     val geoRes = api.getWeatherByIp(ai = ai, lang = lang, units = units)
                     val discoveredLat = geoRes.location?.lat ?: geoRes.ipGeo?.lat
                     val discoveredLon = geoRes.location?.lon ?: geoRes.ipGeo?.lon
                     
                     if (discoveredLat != null && discoveredLon != null) {
-                        // 2. DOUBLE REQUEST: Use discovered coords to call /weather for richer details
                         Log.i("WeatherRepository", "Location discovered via IP: $discoveredLat, $discoveredLon. Fetching full weather.")
                         val fullRes = api.getWeather(lat = discoveredLat, lon = discoveredLon, ai = ai, lang = lang, units = units)
-                        // Merge discovery info (IP metadata) back into the full response
                         response = fullRes.copy(ipGeo = geoRes.ipGeo)
                     } else {
                         response = geoRes
                     }
                 }
                 
-                // 3. BACKFILL: Ensure missing 'current' fields are populated from the matching 'hourly' item
                 response = enrichCurrentWithHourlyData(response)
 
                 val finalLat = response.location?.lat ?: response.ipGeo?.lat ?: 0.0
                 val finalLon = response.location?.lon ?: response.ipGeo?.lon ?: 0.0
-                val city = reverseGeocode(finalLat, finalLon) ?: response.ipGeo?.city ?: "Unknown"
+                
+                // Get city and region from client-side Geocoder for exact location
+                val geoInfo = reverseGeocodeExtended(finalLat, finalLon)
+                val city = geoInfo.city ?: response.ipGeo?.city ?: response.location?.country ?: "Unknown"
+                val region = geoInfo.region ?: response.ipGeo?.region ?: response.location?.timezone ?: ""
 
-                saveToDatabase(response, city, finalLat, finalLon)
-                Result.success(WeatherResponseWithMeta(response, null))
+                saveToDatabase(response, city, region, finalLat, finalLon)
+                Result.success(WeatherResponseWithMeta(response, city, region, null))
             } catch (e: Exception) {
                 Log.w("WeatherRepository", "Network fetch failed, falling back to cache", e)
                 loadFullFromCache()
@@ -82,15 +85,11 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    /**
-     * Enriches the 'current' object using fields from the closest matching hourly forecast item.
-     */
     private fun enrichCurrentWithHourlyData(response: WeatherGeoResponse): WeatherGeoResponse {
         val current = response.current ?: return response
         val hourly = response.hourly ?: return response
         
-        // Find the hourly data matching the current time (by hour)
-        val currentTimeStr = current.time ?: "" // e.g. "2026-06-05T17:30"
+        val currentTimeStr = current.time ?: ""
         val hourPrefix = if (currentTimeStr.length >= 13) currentTimeStr.take(13) else ""
         
         val matchedHour = if (hourPrefix.isNotBlank()) {
@@ -104,7 +103,6 @@ class WeatherRepository @Inject constructor(
             feelsLike = current.feelsLike ?: matchedHour.feelsLike,
             uvIndex = current.uvIndex ?: matchedHour.uvIndex,
             windGust = current.windGust ?: matchedHour.windGust,
-            // Fallback for others if needed
             temperature = current.temperature ?: matchedHour.temperature,
             windSpeed = current.windSpeed ?: matchedHour.windSpeed,
             conditionCode = current.conditionCode ?: matchedHour.conditionCode,
@@ -115,12 +113,12 @@ class WeatherRepository @Inject constructor(
         return response.copy(current = enrichedCurrent)
     }
 
-    private suspend fun saveToDatabase(response: WeatherGeoResponse, city: String, lat: Double, lon: Double) {
+    private suspend fun saveToDatabase(response: WeatherGeoResponse, city: String, region: String, lat: Double, lon: Double) {
         val now = System.currentTimeMillis()
         
         val current = CurrentWeatherEntity(
             city = city,
-            region = response.ipGeo?.region ?: response.location?.timezone ?: "",
+            region = region,
             lat = lat,
             lon = lon,
             temperature = response.current?.temperature,
@@ -226,7 +224,7 @@ class WeatherRepository @Inject constructor(
             aiSummary = AiSummaryDto(summary = currentEntity.aiSummary)
         )
 
-        return Result.success(WeatherResponseWithMeta(response, currentEntity.fetchedAt))
+        return Result.success(WeatherResponseWithMeta(response, currentEntity.city, currentEntity.region, currentEntity.fetchedAt))
     }
 
     suspend fun getUsageStats(): Result<UsageResponse> = withContext(Dispatchers.IO) {
@@ -261,16 +259,19 @@ class WeatherRepository @Inject constructor(
         ))
     }
 
-    private fun reverseGeocode(lat: Double, lon: Double): String? {
+    private fun reverseGeocodeExtended(lat: Double, lon: Double): GeoInfo {
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(lat, lon, 1)
             addresses?.firstOrNull()?.let { address ->
-                address.locality ?: address.subAdminArea ?: address.adminArea
-            }
+                GeoInfo(
+                    city = address.locality ?: address.subAdminArea ?: address.adminArea,
+                    region = address.adminArea ?: address.subAdminArea
+                )
+            } ?: GeoInfo(null, null)
         } catch (e: Exception) {
             Log.w("WeatherRepository", "Reverse geocoding failed", e)
-            null
+            GeoInfo(null, null)
         }
     }
 
@@ -278,7 +279,7 @@ class WeatherRepository @Inject constructor(
         return getFullWeather().map { meta ->
             val response = meta.response
             WeatherData(
-                city = response.ipGeo?.city ?: "Unknown",
+                city = meta.discoveredCity ?: "Unknown",
                 lat = response.location?.lat ?: 0.0,
                 lon = response.location?.lon ?: 0.0,
                 currentTemp = response.current?.temperature ?: 0.0
