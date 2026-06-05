@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,81 +36,86 @@ import coil.compose.AsyncImage
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel) {
     val state by viewModel.uiState.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
+    PullToRefreshBox(
+        isRefreshing = state.isLoading,
+        onRefresh = { viewModel.loadWeather() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .background(BackgroundOffWhite)
         ) {
-            // ── Hero Section with Image ───────────────────────────────────────
-            HomeHero(
-                city = state.city,
-                region = state.region,
-                temp = state.current?.temperature,
-                condition = getConditionText(state.current?.conditionCode)
-            )
-
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
-                // Offline banner (bleeds into padding or stays inside)
-                if (state.isFromCache && state.cachedAt != null) {
-                    Spacer(modifier = Modifier.height(13.dp))
-                    OfflineBanner(cachedAt = state.cachedAt!!)
+                // ── Hero Section with Image ───────────────────────────────────────
+                HomeHero(
+                    city = state.city,
+                    region = state.region,
+                    temp = state.current?.temperature,
+                    condition = getConditionText(state.current?.conditionCode)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    // Offline banner - reactive to real-time network state
+                    OfflineBanner(isOffline = state.isOffline, cachedAt = state.cachedAt)
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // ── StatRow (Primary Metrics) ─────────────────────────────────
+                    StatRow(
+                        humidity = state.current?.humidity?.toInt(),
+                        windSpeed = state.current?.windSpeed,
+                        feelsLike = state.current?.feelsLike
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // ── AI Insight section ────────────────────────────────────────
+                    // Only show if aiEnabled is true in settings
+                    if (state.aiEnabled) {
+                        AiInsightSection(
+                            summary = state.aiSummary,
+                            isLoading = state.isLoadingAiSummary,
+                            onGetInsight = { viewModel.refreshWithAi() }
+                        )
+                        Spacer(modifier = Modifier.height(15.dp))
+                    }
+
+                    // ── Next 6 Hours ──────────────────────────────────────────────
+                    SectionHeading(text = "Next 6 hours")
+                    HourlyStrip(hours = state.hourly.take(6))
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // ── Today's Details Grid ──────────────────────────────────────
+                    SectionHeading(text = "Today's details")
+                    DetailsGrid(state)
+
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // ── StatRow (Primary Metrics) ─────────────────────────────────
-                val currentHourly = state.hourly.firstOrNull()
-                StatRow(
-                    humidity = currentHourly?.humidity?.toInt(),
-                    windSpeed = state.current?.windSpeed,
-                    feelsLike = currentHourly?.feelsLike
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // ── AI Insight section ────────────────────────────────────────
-                AiInsightSection(
-                    summary = state.aiSummary,
-                    isLoading = state.isLoadingAiSummary,
-                    onGetInsight = { viewModel.loadAiSummary() }
-                )
-
-                Spacer(modifier = Modifier.height(15.dp))
-
-                // ── Next 6 Hours ──────────────────────────────────────────────
-                SectionHeading(text = "Next 6 hours")
-                HourlyStrip(hours = state.hourly.take(6))
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // ── Today's Details Grid ──────────────────────────────────────
-                SectionHeading(text = "Today's details")
-                DetailsGrid(state)
-
-                Spacer(modifier = Modifier.height(80.dp))
             }
-        }
 
-        // Global Loading Overlay
-        AnimatedVisibility(
-            visible = state.isLoading && state.current == null,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            LoadingOverlay("Synchronizing farm data...")
+            // Global Loading Overlay (only for first load)
+            AnimatedVisibility(
+                visible = state.isLoading && state.current == null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                LoadingOverlay("Synchronizing farm data...")
+            }
         }
     }
 }
@@ -200,54 +206,21 @@ private fun StatChip(modifier: Modifier, value: String, label: String) {
 }
 
 @Composable
-private fun AiInsightSection(summary: String?, isLoading: Boolean, onGetInsight: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, if (summary != null) Color(0xFFB8DAC5) else BorderGrey, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = if (summary != null) Color(0xFFEAF4EE) else SurfaceWhite),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp), tint = ForestGreen)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("AI INSIGHT", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = ForestGreen, letterSpacing = 0.1.sp)
-                }
-                if (summary == null && !isLoading) {
-                    TextButton(onClick = onGetInsight, contentPadding = PaddingValues(0.dp)) {
-                        Text("Get insight →", fontSize = 14.sp, color = ForestGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            if (isLoading) {
-                Spacer(modifier = Modifier.height(16.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = ForestGreen, trackColor = Color(0xFFB8DAC5).copy(alpha = 0.3f))
-            } else if (summary != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(text = summary, fontSize = 16.sp, color = ForestGreen, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
-            }
-        }
-    }
-}
-
-@Composable
 private fun DetailsGrid(state: HomeUiState) {
     val daily = state.daily.firstOrNull()
-    val hourly = state.hourly.firstOrNull()
+    val current = state.current
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             DetailCard(Modifier.weight(1f), "Sunrise", daily?.sunrise?.takeLast(5) ?: "--", Icons.Outlined.WbTwilight)
             DetailCard(Modifier.weight(1f), "Sunset", daily?.sunset?.takeLast(5) ?: "--", Icons.Outlined.WbTwilight)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            DetailCard(Modifier.weight(1f), "UV Index", hourly?.uvIndex?.toInt()?.toString() ?: "--", Icons.Outlined.WbSunny)
-            DetailCard(Modifier.weight(1f), "Rain Chance", "${daily?.precipitationProbability?.toInt() ?: "--"}%", Icons.Outlined.Umbrella)
+            DetailCard(Modifier.weight(1f), "UV Index", "${current?.uvIndex?.toInt() ?: "--"}", Icons.Outlined.WbSunny)
+            DetailCard(Modifier.weight(1f), "Rain chance", "${daily?.precipitationProbability?.toInt() ?: "--"}%", Icons.Outlined.Umbrella)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            DetailCard(Modifier.weight(1f), "Wind gust", "${current?.windGust?.toInt() ?: "--"} km/h", Icons.Outlined.Air)
+            DetailCard(Modifier.weight(1f), "Precip. sum", "${daily?.precipitationSum?.let { "%.1f mm".format(it) } ?: "--"}", Icons.Outlined.WaterDrop)
         }
     }
 }

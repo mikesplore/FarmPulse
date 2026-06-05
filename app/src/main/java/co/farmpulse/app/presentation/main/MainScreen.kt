@@ -32,6 +32,8 @@ import co.farmpulse.app.presentation.home.HomeViewModel
 import co.farmpulse.app.presentation.scanner.AnalysisResultScreen
 import co.farmpulse.app.presentation.scanner.ScannerScreen
 import co.farmpulse.app.presentation.scanner.ScannerViewModel
+import co.farmpulse.app.presentation.settings.SettingsScreen
+import co.farmpulse.app.presentation.settings.SettingsViewModel
 import co.farmpulse.app.ui.theme.*
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,11 +44,13 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Home     : Screen("home",     "Home",     Icons.Outlined.Home)
     object Forecast : Screen("forecast", "Forecast", Icons.Outlined.CalendarMonth)
     object Scanner  : Screen("scanner",  "Scanner",  Icons.Outlined.PhotoCamera)
+    object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
+    // ADDED: Back so the route can be resolved in NavHost, but excluded from bottomNavScreens
     object History  : Screen("history",  "History",  Icons.Outlined.History)
 }
 
 private val bottomNavScreens = listOf(
-    Screen.Home, Screen.Forecast, Screen.Scanner, Screen.History
+    Screen.Home, Screen.Forecast, Screen.Scanner, Screen.Settings
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +62,8 @@ fun MainScreen(
     homeViewModel:     HomeViewModel,
     forecastViewModel: ForecastViewModel,
     scannerViewModel:  ScannerViewModel,
-    historyViewModel:  HistoryViewModel
+    historyViewModel:  HistoryViewModel,
+    settingsViewModel: SettingsViewModel
 ) {
     val navController = rememberNavController()
 
@@ -92,6 +97,10 @@ fun MainScreen(
                     viewModel          = scannerViewModel,
                     onNavigateToResult = { navController.navigate("scanner/result") }
                 )
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen(settingsViewModel)
             }
 
             composable(Screen.History.route) {

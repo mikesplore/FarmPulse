@@ -69,6 +69,16 @@ fun ForecastScreen(viewModel: ForecastViewModel) {
                     Spacer(modifier = Modifier.height(32.dp))
                 }
 
+                // ── AI Insight section (Forecast) ─────────────────────────────
+                if (state.aiEnabled) {
+                    AiInsightSection(
+                        summary = state.aiSummary,
+                        isLoading = state.isLoading && state.aiSummary == null,
+                        onGetInsight = { viewModel.loadForecast() }
+                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+
                 // ── Main Forecast Card ────────────────────────────────────────
                 Card(
                     modifier = Modifier

@@ -8,7 +8,8 @@ data class WeatherGeoResponse(
     @SerializedName("hourly") val hourly: List<HourlyForecastDto>? = null,
     @SerializedName("daily") val daily: List<DailyForecastDto>? = null,
     @SerializedName("client_geo") val clientGeo: ClientGeoDto? = null,
-    @SerializedName("ip_geo") val ipGeo: IpGeoDto? = null
+    @SerializedName("ip_geo") val ipGeo: IpGeoDto? = null,
+    @SerializedName("ai_summary") val aiSummary: AiSummaryDto? = null
 )
 
 data class LocationDto(
@@ -35,6 +36,12 @@ data class IpGeoDto(
     @SerializedName("org") val org: String? = null,
     @SerializedName("ip_hash") val ipHash: String? = null,
     @SerializedName("source") val source: String? = null
+)
+
+data class AiSummaryDto(
+    @SerializedName("summary") val summary: String? = null,
+    @SerializedName("lang") val lang: String? = null,
+    @SerializedName("generated_at") val generatedAt: String? = null
 )
 
 typealias CurrentWeatherResponse = WeatherGeoResponse

@@ -11651,4 +11651,4 @@ and the final part for the settings, the usage stats
   }
 }
 
-I need the changes made. Plan your redesign and make these changes.
+Can you go throough this file and restructure your approach to this app, you missed the core functionalities, the app was ommiting some key data from the user, and the initial prompt didnt lok into details, the server responses/what we need to send to the server, i hopw this file contains all the necessary things for the changes.   if you could give your updated visuals for the app, and a new file for making the fixes (adding missing data components) that would be great. Go through this file keenly, it outlines what the server expects and its responses. the ap was already developed, but these were the issues seen.

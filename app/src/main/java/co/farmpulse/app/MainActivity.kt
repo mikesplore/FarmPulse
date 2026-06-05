@@ -10,6 +10,7 @@ import co.farmpulse.app.presentation.home.HomeViewModel
 import co.farmpulse.app.presentation.forecast.ForecastViewModel
 import co.farmpulse.app.presentation.history.HistoryViewModel
 import co.farmpulse.app.presentation.scanner.ScannerViewModel
+import co.farmpulse.app.presentation.settings.SettingsViewModel
 import co.farmpulse.app.presentation.main.MainScreen
 
 @AndroidEntryPoint
@@ -18,6 +19,7 @@ class MainActivity : ComponentActivity() {
     private val forecastViewModel: ForecastViewModel by viewModels()
     private val scannerViewModel: ScannerViewModel by viewModels()
     private val historyViewModel: HistoryViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +29,8 @@ class MainActivity : ComponentActivity() {
                     homeViewModel = homeViewModel,
                     forecastViewModel = forecastViewModel,
                     scannerViewModel = scannerViewModel,
-                    historyViewModel = historyViewModel
+                    historyViewModel = historyViewModel,
+                    settingsViewModel = settingsViewModel
                 )
             }
         }
