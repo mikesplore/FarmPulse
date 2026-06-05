@@ -34,6 +34,7 @@ import co.farmpulse.app.presentation.scanner.ScannerScreen
 import co.farmpulse.app.presentation.scanner.ScannerViewModel
 import co.farmpulse.app.presentation.settings.SettingsScreen
 import co.farmpulse.app.presentation.settings.SettingsViewModel
+import co.farmpulse.app.presentation.setup.SetupScreen
 import co.farmpulse.app.ui.theme.*
 import co.farmpulse.app.util.SnackbarManager
 import kotlinx.coroutines.flow.collectLatest
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.collectLatest
 // ─────────────────────────────────────────────────────────────────────────────
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
+    object Setup    : Screen("setup",    "Setup",    Icons.Outlined.Key)
     object Home     : Screen("home",     "Home",     Icons.Outlined.Home)
     object Forecast : Screen("forecast", "Forecast", Icons.Outlined.CalendarMonth)
     object Scanner  : Screen("scanner",  "Scanner",  Icons.Outlined.PhotoCamera)
@@ -65,10 +67,15 @@ fun MainScreen(
     scannerViewModel:  ScannerViewModel,
     historyViewModel:  HistoryViewModel,
     settingsViewModel: SettingsViewModel,
-    snackbarManager:   SnackbarManager // Pass the global SnackbarManager
+    snackbarManager:   SnackbarManager
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
+    val settingsState by settingsViewModel.uiState.collectAsState()
+    
+    val isApiKeyMissing = settingsState.apiKey.isBlank()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     // Observe global snackbar messages
     LaunchedEffect(snackbarManager.messages) {
@@ -81,22 +88,36 @@ fun MainScreen(
     }
 
     Scaffold(
-        containerColor = BackgroundOffWhite,   // #F8F7F2
+        containerColor = BackgroundOffWhite,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            FarmPulseBottomNav(
-                navController     = navController,
-                screens           = bottomNavScreens
-            )
+            // Only show bottom nav if API key exists and we are not on setup screen
+            if (!isApiKeyMissing && currentRoute != Screen.Setup.route) {
+                FarmPulseBottomNav(
+                    navController = navController,
+                    screens = bottomNavScreens
+                )
+            }
         }
     ) { innerPadding ->
         NavHost(
             navController  = navController,
-            startDestination = Screen.Home.route,
+            startDestination = if (isApiKeyMissing) Screen.Setup.route else Screen.Home.route,
             modifier       = Modifier.padding(innerPadding),
             enterTransition = { fadeIn(animationSpec  = tween(150)) },
             exitTransition  = { fadeOut(animationSpec = tween(100)) }
         ) {
+            composable(Screen.Setup.route) {
+                SetupScreen(
+                    onSaveApiKey = { key ->
+                        settingsViewModel.setApiKey(key)
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Setup.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable(Screen.Home.route) {
                 HomeScreen(homeViewModel)
             }
@@ -131,7 +152,6 @@ fun MainScreen(
                 )
             }
 
-            // Scanner result — horizontal slide push (per spec)
             composable(
                 route = "scanner/result",
                 enterTransition    = { slideInHorizontally(initialOffsetX = { it },  animationSpec = tween(300)) },
@@ -141,8 +161,6 @@ fun MainScreen(
             ) {
                 val scannerState by scannerViewModel.uiState.collectAsState()
                 val historyState by historyViewModel.uiState.collectAsState()
-
-                // Prefer the freshly-analysed result; fall back to the explicitly selected history item
                 val result = scannerState.result ?: historyState.selectedItem
 
                 if (result != null) {
@@ -175,7 +193,7 @@ private fun FarmPulseBottomNav(
     Column {
         HorizontalDivider(
             thickness = 0.5.dp,
-            color     = BorderGrey     // #E0DFD8
+            color     = BorderGrey
         )
 
         NavigationBar(
