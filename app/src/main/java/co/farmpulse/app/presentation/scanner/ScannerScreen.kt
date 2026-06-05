@@ -40,6 +40,8 @@ fun ScannerScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState()
+    var showBottomSheet by remember { mutableStateOf(false) }
 
     // Navigate when a result arrives and immediately clear it in the callback
     LaunchedEffect(state.result) {
@@ -78,7 +80,7 @@ fun ScannerScreen(
             ) {
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Screen title — Updated to be Bold and Larger for consistency
+                // Screen title
                 Text(
                     text = "Farm scanner",
                     fontSize = 22.sp,
@@ -98,31 +100,11 @@ fun ScannerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // ── Upload zone ───────────────────────────────────────────────────
-                UploadZone(imageUri = state.selectedImageUri)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // ── Image source row ──────────────────────────────────────────────
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    SourceChip(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.PhotoCamera,
-                        label = "Camera",
-                        onClick = {
-                            val uri = viewModel.prepareCameraUri(context)
-                            cameraLauncher.launch(uri)
-                        }
-                    )
-                    SourceChip(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Outlined.PhotoLibrary,
-                        label = "Gallery",
-                        onClick = { galleryLauncher.launch("image/*") }
-                    )
-                }
+                // Now clickable to trigger the bottom sheet
+                UploadZone(
+                    imageUri = state.selectedImageUri,
+                    onClick = { showBottomSheet = true }
+                )
 
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -202,6 +184,55 @@ fun ScannerScreen(
             }
         }
     }
+
+    // ── Image Source Bottom Sheet ────────────────────────────────────────────────
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+            containerColor = SurfaceWhite,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = BorderGrey) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp, top = 8.dp)
+            ) {
+                Text(
+                    text = "Select image source",
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurfaceCharcoal
+                )
+
+                ListItem(
+                    headlineContent = { Text("Take photo", fontWeight = FontWeight.Medium) },
+                    leadingContent = { 
+                        Icon(Icons.Outlined.PhotoCamera, null, tint = ForestGreen) 
+                    },
+                    modifier = Modifier.clickable {
+                        showBottomSheet = false
+                        val uri = viewModel.prepareCameraUri(context)
+                        cameraLauncher.launch(uri)
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+
+                ListItem(
+                    headlineContent = { Text("Choose from gallery", fontWeight = FontWeight.Medium) },
+                    leadingContent = { 
+                        Icon(Icons.Outlined.PhotoLibrary, null, tint = ForestGreen) 
+                    },
+                    modifier = Modifier.clickable {
+                        showBottomSheet = false
+                        galleryLauncher.launch("image/*")
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -262,7 +293,7 @@ private fun QuotaCard(used: Int, limit: Int, resetsAt: String) {
 }
 
 @Composable
-private fun UploadZone(imageUri: Uri?) {
+private fun UploadZone(imageUri: Uri?, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -273,7 +304,8 @@ private fun UploadZone(imageUri: Uri?) {
                 width = 1.dp,
                 color = if (imageUri != null) BorderGrey else Color(0xFFB8DAC5),
                 shape = RoundedCornerShape(16.dp)
-            ),
+            )
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (imageUri != null) {
@@ -305,41 +337,6 @@ private fun UploadZone(imageUri: Uri?) {
                     color = SecondaryText
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SourceChip(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier
-            .height(44.dp)
-            .clickable(onClick = onClick),
-        color = SurfaceVariant,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = ForestGreen
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = ForestGreen
-            )
         }
     }
 }

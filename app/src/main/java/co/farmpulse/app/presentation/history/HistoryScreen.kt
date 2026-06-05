@@ -5,25 +5,35 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Park
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.domain.model.TreeAnalysisResult
 import co.farmpulse.app.ui.theme.*
+import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,6 +45,16 @@ fun HistoryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     
+    // Group items by date for a better UX
+    val groupedItems = remember(state.items) {
+        state.items.groupBy { item ->
+            val date = Instant.ofEpochMilli(item.timestamp)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+            date
+        }.toSortedMap(compareByDescending { it })
+    }
+
     PullToRefreshBox(
         isRefreshing = state.isLoading,
         onRefresh = { viewModel.refreshHistory() },
@@ -44,104 +64,150 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(BackgroundOffWhite)
-                .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Screen title — Updated to be Bold and Larger for consistency
             Text(
                 text = "Scan history",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = OnSurfaceCharcoal
+                color = OnSurfaceCharcoal,
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
             
             Text(
                 text = "${state.items.size} analyses total",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    color = SecondaryText
-                ),
-                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                fontSize = 13.sp,
+                color = SecondaryText,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
 
-            if (state.items.isEmpty()) {
+            if (state.items.isEmpty() && !state.isLoading) {
                 EmptyHistory(onNewScan)
             } else {
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp)),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-                    shape = RoundedCornerShape(14.dp)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 14.dp)
-                    ) {
-                        itemsIndexed(state.items) { index, item ->
-                            HistoryItem(item, onClick = { onNavigateToResult(item) })
-                            if (index < state.items.size - 1) {
-                                HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
-                            }
+                    groupedItems.forEach { (date, items) ->
+                        item {
+                            DateHeader(date)
+                        }
+                        items(items) { item ->
+                            HistoryCard(item, onClick = { onNavigateToResult(item) })
                         }
                     }
+                    
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        QuotaFooter(remaining = 3, onNewScan = onNewScan)
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
                 }
-                
-                QuotaFooter(remaining = 3, onNewScan = onNewScan)
             }
         }
     }
 }
 
 @Composable
-fun HistoryItem(item: TreeAnalysisResult, onClick: () -> Unit) {
-    Row(
+private fun DateHeader(date: LocalDate) {
+    val formatter = remember { DateTimeFormatter.ofPattern("EEEE, d MMMM") }
+    val today = LocalDate.now()
+    val label = when (date) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> date.format(formatter)
+    }
+    
+    Text(
+        text = label,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = SecondaryText,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun HistoryCard(item: TreeAnalysisResult, onClick: () -> Unit) {
+    val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+    val timeStr = remember(item.timestamp) { timeFormatter.format(Date(item.timestamp)) }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(Color(0xFFC8E6D4), RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Thumbnail or Icon
+            if (item.imageUrl != null) {
+                AsyncImage(
+                    model = item.imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceVariant),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFEAF4EE)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Park,
+                        contentDescription = null,
+                        tint = ForestGreen,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = if (!item.county.isNullOrBlank()) "Farm in ${item.county}" else "Farm Analysis",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurfaceCharcoal
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${item.totalTreeCount} trees detected · $timeStr",
+                    fontSize = 12.sp,
+                    color = SecondaryText
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                HealthBadge(item)
+            }
+            
             Icon(
-                imageVector = Icons.Outlined.Park,
+                imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = ForestGreen,
-                modifier = Modifier.size(18.dp)
+                tint = BorderGrey,
+                modifier = Modifier.size(20.dp)
             )
         }
-        
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp)
-        ) {
-            Text(
-                text = "Farm Analysis",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = OnSurfaceCharcoal
-            )
-            Text(
-                text = "${item.totalTreeCount} trees · Jun 4",
-                fontSize = 11.sp,
-                color = SecondaryText
-            )
-        }
-        
-        HealthBadge(item)
     }
 }
 
 @Composable
-fun HealthBadge(result: TreeAnalysisResult) {
+private fun HealthBadge(result: TreeAnalysisResult) {
     val status = when {
         result.confidenceScore >= 0.8 -> "Healthy"
         result.confidenceScore >= 0.5 -> "Needs care"
@@ -156,20 +222,20 @@ fun HealthBadge(result: TreeAnalysisResult) {
 
     Surface(
         color = bgColor,
-        shape = RoundedCornerShape(6.dp)
+        shape = RoundedCornerShape(8.dp)
     ) {
         Text(
             text = status,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
             color = textColor
         )
     }
 }
 
 @Composable
-fun QuotaFooter(remaining: Int, onNewScan: () -> Unit) {
+private fun QuotaFooter(remaining: Int, onNewScan: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,53 +244,68 @@ fun QuotaFooter(remaining: Int, onNewScan: () -> Unit) {
     ) {
         Text(
             text = "$remaining analyses remaining this month",
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = SecondaryText,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedButton(
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
             onClick = onNewScan,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp),
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, ForestGreen),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ForestGreen)
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = ForestGreen)
         ) {
-            Text("New scan", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text("Start new scan", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
     }
 }
 
 @Composable
-fun EmptyHistory(onNewScan: () -> Unit) {
+private fun EmptyHistory(onNewScan: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Park,
-            contentDescription = null,
-            tint = BorderGrey,
-            modifier = Modifier.size(64.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .background(SurfaceVariant, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Park,
+                contentDescription = null,
+                tint = BorderGrey,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "No scans yet. Upload your first farm photo.",
-            fontSize = 13.sp,
-            color = SecondaryText,
+            text = "No scans yet",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = OnSurfaceCharcoal,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Upload your first farm photo to see AI-powered tree analysis here.",
+            fontSize = 14.sp,
+            color = SecondaryText,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
+        )
+        Spacer(modifier = Modifier.height(32.dp))
         Button(
             onClick = onNewScan,
-            modifier = Modifier.height(48.dp),
-            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(52.dp).fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ForestGreen)
         ) {
-            Text("Start first scan", color = Color.White)
+            Text("Start first scan", color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }

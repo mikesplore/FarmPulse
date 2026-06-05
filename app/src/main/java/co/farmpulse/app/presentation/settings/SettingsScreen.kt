@@ -38,7 +38,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         ) {
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Screen title — Updated to 22.sp Bold for consistency across major screens
+            // Screen title — Consistent 22.sp Bold
             Text(
                 text = "Settings",
                 fontSize = 22.sp,
@@ -145,7 +145,6 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 
 @Composable
 private fun UsageCard(state: SettingsUiState) {
-    // If not refreshing (isLoadingUsage managed by PullToRefreshBox), show content
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -154,7 +153,6 @@ private fun UsageCard(state: SettingsUiState) {
             .background(SurfaceWhite, RoundedCornerShape(14.dp))
             .padding(16.dp)
     ) {
-        // Requests
         UsageBar(
             label    = "API requests",
             used     = state.requestsUsed,
@@ -162,7 +160,6 @@ private fun UsageCard(state: SettingsUiState) {
             remaining = state.requestsRemaining
         )
         Spacer(modifier = Modifier.height(14.dp))
-        // AI requests
         UsageBar(
             label    = "AI requests",
             used     = state.aiRequestsUsed,
@@ -182,11 +179,11 @@ private fun UsageBar(label: String, used: Int, limit: Int, remaining: Int) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 12.sp, color = SecondaryText)
+        Text(label, fontSize = 13.sp, color = SecondaryText)
         Text(
             text = "$used / $limit",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
             color = if (isNearLimit) AccentAmber else ForestGreen
         )
     }
@@ -194,20 +191,20 @@ private fun UsageBar(label: String, used: Int, limit: Int, remaining: Int) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(6.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .height(8.dp)
+            .clip(RoundedCornerShape(4.dp))
             .background(SurfaceVariant)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(fraction)
-                .clip(RoundedCornerShape(3.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(if (isNearLimit) AccentAmber else LightGreen)
         )
     }
-    Spacer(modifier = Modifier.height(3.dp))
-    Text("$remaining remaining", fontSize = 11.sp, color = SecondaryText)
+    Spacer(modifier = Modifier.height(4.dp))
+    Text("$remaining remaining", fontSize = 12.sp, color = SecondaryText)
 }
 
 @Composable
@@ -221,48 +218,48 @@ private fun LocationOverrideRow(
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.EditLocation, null, modifier = Modifier.size(18.dp), tint = SecondaryText)
+            Icon(Icons.Outlined.EditLocation, null, modifier = Modifier.size(20.dp), tint = SecondaryText)
             Spacer(modifier = Modifier.width(12.dp))
-            Text("Override location", fontSize = 13.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium)
+            Text("Override location", fontSize = 15.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium)
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value         = cityOverride,
             onValueChange = onCityChange,
             modifier      = Modifier.fillMaxWidth(),
-            label         = { Text("City name", fontSize = 12.sp) },
-            placeholder   = { Text("e.g. Mombasa", fontSize = 12.sp, color = SecondaryText) },
+            label         = { Text("City name", fontSize = 13.sp) },
+            placeholder   = { Text("e.g. Mombasa", fontSize = 13.sp, color = SecondaryText) },
             singleLine    = true,
-            shape         = RoundedCornerShape(8.dp),
+            shape         = RoundedCornerShape(12.dp),
             colors        = settingsTextFieldColors()
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(
                 value         = latOverride,
                 onValueChange = onLatChange,
                 modifier      = Modifier.weight(1f),
-                label         = { Text("Latitude", fontSize = 12.sp) },
-                placeholder   = { Text("-4.05", fontSize = 12.sp, color = SecondaryText) },
+                label         = { Text("Latitude", fontSize = 13.sp) },
+                placeholder   = { Text("-4.05", fontSize = 13.sp, color = SecondaryText) },
                 singleLine    = true,
-                shape         = RoundedCornerShape(8.dp),
+                shape         = RoundedCornerShape(12.dp),
                 colors        = settingsTextFieldColors()
             )
             OutlinedTextField(
                 value         = lonOverride,
                 onValueChange = onLonChange,
                 modifier      = Modifier.weight(1f),
-                label         = { Text("Longitude", fontSize = 12.sp) },
-                placeholder   = { Text("39.66", fontSize = 12.sp, color = SecondaryText) },
+                label         = { Text("Longitude", fontSize = 13.sp) },
+                placeholder   = { Text("39.66", fontSize = 13.sp, color = SecondaryText) },
                 singleLine    = true,
-                shape         = RoundedCornerShape(8.dp),
+                shape         = RoundedCornerShape(12.dp),
                 colors        = settingsTextFieldColors()
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Overrides GPS/IP detection for all weather requests.",
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = SecondaryText
         )
     }
@@ -272,10 +269,10 @@ private fun LocationOverrideRow(
 private fun SettingsSectionLabel(text: String) {
     Text(
         text = text.uppercase(),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
         color = SecondaryText,
-        letterSpacing = 0.07.sp,
+        letterSpacing = 0.5.sp,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 0.dp)
     )
     Spacer(modifier = Modifier.height(8.dp))
@@ -287,15 +284,15 @@ private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp))
-            .background(SurfaceWhite, RoundedCornerShape(14.dp)),
+            .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp))
+            .background(SurfaceWhite, RoundedCornerShape(16.dp)),
         content = content
     )
 }
 
 @Composable
 private fun Divider() {
-    HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+    HorizontalDivider(thickness = 0.5.dp, color = BorderGrey, modifier = Modifier.padding(horizontal = 16.dp))
 }
 
 @Composable
@@ -309,15 +306,15 @@ private fun SwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, modifier = Modifier.size(18.dp), tint = SecondaryText)
+        Icon(icon, null, modifier = Modifier.size(20.dp), tint = SecondaryText)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, fontSize = 13.sp, color = OnSurfaceCharcoal)
+            Text(label, fontSize = 15.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium)
             subLabel?.let {
-                Text(it, fontSize = 11.sp, color = SecondaryText)
+                Text(it, fontSize = 12.sp, color = SecondaryText)
             }
         }
         Switch(
@@ -338,7 +335,7 @@ private fun SwitchRow(
 @Composable
 private fun SelectRow(
     label: String,
-    options: List<Pair<String, String>>,  // display to value
+    options: List<Pair<String, String>>,
     current: String,
     onSelect: (String) -> Unit,
     icon: ImageVector
@@ -349,30 +346,30 @@ private fun SelectRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, modifier = Modifier.size(18.dp), tint = SecondaryText)
+        Icon(icon, null, modifier = Modifier.size(20.dp), tint = SecondaryText)
         Spacer(modifier = Modifier.width(12.dp))
-        Text(label, fontSize = 13.sp, color = OnSurfaceCharcoal, modifier = Modifier.weight(1f))
+        Text(label, fontSize = 15.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Box {
             TextButton(
                 onClick = { expanded = true },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
             ) {
-                Text(currentLabel, fontSize = 13.sp, color = ForestGreen, fontWeight = FontWeight.Medium)
-                Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(16.dp), tint = ForestGreen)
+                Text(currentLabel, fontSize = 15.sp, color = ForestGreen, fontWeight = FontWeight.Bold)
+                Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(18.dp), tint = ForestGreen)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { (displayName, value) ->
                     DropdownMenuItem(
-                        text    = { Text(displayName, fontSize = 13.sp) },
+                        text    = { Text(displayName, fontSize = 14.sp) },
                         onClick = {
                             onSelect(value)
                             expanded = false
                         },
                         leadingIcon = if (value == current) ({
-                            Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp), tint = ForestGreen)
+                            Icon(Icons.Outlined.Check, null, modifier = Modifier.size(18.dp), tint = ForestGreen)
                         }) else null
                     )
                 }
@@ -391,16 +388,16 @@ private fun InfoRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, modifier = Modifier.size(18.dp), tint = SecondaryText)
+        Icon(icon, null, modifier = Modifier.size(20.dp), tint = SecondaryText)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, fontSize = 13.sp, color = OnSurfaceCharcoal)
-            subLabel?.let { Text(it, fontSize = 11.sp, color = SecondaryText) }
+            Text(label, fontSize = 15.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium)
+            subLabel?.let { Text(it, fontSize = 12.sp, color = SecondaryText) }
         }
-        Text(value, fontSize = 13.sp, color = SecondaryText)
+        Text(value, fontSize = 14.sp, color = SecondaryText, fontWeight = FontWeight.Medium)
     }
 }
 

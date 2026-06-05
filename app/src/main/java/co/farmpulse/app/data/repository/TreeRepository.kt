@@ -65,7 +65,10 @@ class TreeRepository @Inject constructor(
             val domain = TreeAnalysisResult(
                 analysisId = analysisId,
                 totalTreeCount = response.totalTreeCount ?: 0,
-                confidenceScore = response.confidenceScore ?: 0.0
+                confidenceScore = response.confidenceScore ?: 0.0,
+                timestamp = entity.createdAt,
+                county = response.county,
+                imageUrl = response.overlayImageUrl
             )
 
             Result.success(domain)
@@ -92,7 +95,10 @@ class TreeRepository @Inject constructor(
                     TreeAnalysisResult(
                         analysisId = dto.analysisId ?: entity.analysisId,
                         totalTreeCount = dto.totalTreeCount ?: 0,
-                        confidenceScore = dto.confidenceScore ?: 0.0
+                        confidenceScore = dto.confidenceScore ?: 0.0,
+                        timestamp = entity.createdAt,
+                        county = dto.county,
+                        imageUrl = dto.overlayImageUrl
                     )
                 } catch (e: Exception) {
                     null
