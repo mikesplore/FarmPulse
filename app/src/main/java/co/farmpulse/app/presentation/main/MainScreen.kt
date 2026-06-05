@@ -35,6 +35,8 @@ import co.farmpulse.app.presentation.scanner.ScannerViewModel
 import co.farmpulse.app.presentation.settings.SettingsScreen
 import co.farmpulse.app.presentation.settings.SettingsViewModel
 import co.farmpulse.app.ui.theme.*
+import co.farmpulse.app.util.SnackbarManager
+import kotlinx.coroutines.flow.collectLatest
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Nav destinations
@@ -44,13 +46,12 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Home     : Screen("home",     "Home",     Icons.Outlined.Home)
     object Forecast : Screen("forecast", "Forecast", Icons.Outlined.CalendarMonth)
     object Scanner  : Screen("scanner",  "Scanner",  Icons.Outlined.PhotoCamera)
-    object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
-    // ADDED: Back so the route can be resolved in NavHost, but excluded from bottomNavScreens
     object History  : Screen("history",  "History",  Icons.Outlined.History)
+    object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
 }
 
 private val bottomNavScreens = listOf(
-    Screen.Home, Screen.Forecast, Screen.Scanner, Screen.Settings
+    Screen.Home, Screen.Forecast, Screen.Scanner, Screen.History, Screen.Settings
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,12 +64,25 @@ fun MainScreen(
     forecastViewModel: ForecastViewModel,
     scannerViewModel:  ScannerViewModel,
     historyViewModel:  HistoryViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    snackbarManager:   SnackbarManager // Pass the global SnackbarManager
 ) {
     val navController = rememberNavController()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Observe global snackbar messages
+    LaunchedEffect(snackbarManager.messages) {
+        snackbarManager.messages.collectLatest { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
 
     Scaffold(
-        containerColor = BackgroundOffWhite,   // #F8F7F2 — Scaffold bg matches screen bg
+        containerColor = BackgroundOffWhite,   // #F8F7F2
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             FarmPulseBottomNav(
                 navController     = navController,
@@ -80,7 +94,6 @@ fun MainScreen(
             navController  = navController,
             startDestination = Screen.Home.route,
             modifier       = Modifier.padding(innerPadding),
-            // Default transitions: fade for tab switches (calm, per spec)
             enterTransition = { fadeIn(animationSpec  = tween(150)) },
             exitTransition  = { fadeOut(animationSpec = tween(100)) }
         ) {
@@ -95,7 +108,10 @@ fun MainScreen(
             composable(Screen.Scanner.route) {
                 ScannerScreen(
                     viewModel          = scannerViewModel,
-                    onNavigateToResult = { navController.navigate("scanner/result") }
+                    onNavigateToResult = { 
+                        historyViewModel.selectItem(null)
+                        navController.navigate("scanner/result") 
+                    }
                 )
             }
 
@@ -106,8 +122,9 @@ fun MainScreen(
             composable(Screen.History.route) {
                 HistoryScreen(
                     viewModel          = historyViewModel,
-                    onNavigateToResult = {
-                        // ViewModel already holds the selected result; just navigate
+                    onNavigateToResult = { result ->
+                        scannerViewModel.clearResult()
+                        historyViewModel.selectItem(result)
                         navController.navigate("scanner/result")
                     },
                     onNewScan          = { navController.navigate(Screen.Scanner.route) }
@@ -123,15 +140,19 @@ fun MainScreen(
                 popExitTransition  = { slideOutHorizontally(targetOffsetX = { it },  animationSpec = tween(300)) }
             ) {
                 val scannerState by scannerViewModel.uiState.collectAsState()
-                val historyList  by historyViewModel.history.collectAsState()
+                val historyState by historyViewModel.uiState.collectAsState()
 
-                // Prefer the freshly-analysed result; fall back to last history item
-                val result = scannerState.result ?: historyList.firstOrNull()
+                // Prefer the freshly-analysed result; fall back to the explicitly selected history item
+                val result = scannerState.result ?: historyState.selectedItem
 
                 if (result != null) {
                     AnalysisResultScreen(
                         result = result,
-                        onBack = { navController.popBackStack() }
+                        onBack = { 
+                            scannerViewModel.clearResult()
+                            historyViewModel.selectItem(null)
+                            navController.popBackStack() 
+                        }
                     )
                 }
             }
@@ -152,25 +173,20 @@ private fun FarmPulseBottomNav(
     val currentDestination = navBackStackEntry?.destination
 
     Column {
-        // FIX: spec calls for a 0.5dp BorderGrey top divider, NOT Material3's default
-        // tonal surface elevation. Draw it manually.
         HorizontalDivider(
             thickness = 0.5.dp,
             color     = BorderGrey     // #E0DFD8
         )
 
         NavigationBar(
-            containerColor  = BackgroundOffWhite,   // #F8F7F2 — matches screen bg
-            tonalElevation  = 0.dp                  // removes default M3 tonal shift
+            containerColor  = BackgroundOffWhite,
+            tonalElevation  = 0.dp
         ) {
             screens.forEach { screen ->
                 val isSelected = currentDestination
                     ?.hierarchy
                     ?.any { it.route == screen.route } == true
 
-                // FIX: original code computed iconTint outside NavigationBarItem and
-                // then also set colors inside it — conflicting definitions.
-                // Centralise here with NavigationBarItemDefaults.
                 NavigationBarItem(
                     selected = isSelected,
                     onClick  = {
@@ -187,7 +203,6 @@ private fun FarmPulseBottomNav(
                             imageVector        = screen.icon,
                             contentDescription = screen.label,
                             modifier           = Modifier.size(20.dp)
-                            // tint comes from NavigationBarItemDefaults below
                         )
                     },
                     label = {
@@ -198,11 +213,11 @@ private fun FarmPulseBottomNav(
                         )
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = ForestGreen,          // #2D6A4F
+                        selectedIconColor   = ForestGreen,
                         selectedTextColor   = ForestGreen,
-                        unselectedIconColor = Color(0xFFB0AFA8),    // muted
+                        unselectedIconColor = Color(0xFFB0AFA8),
                         unselectedTextColor = Color(0xFFB0AFA8),
-                        indicatorColor      = Color.Transparent     // no pill highlight
+                        indicatorColor      = Color.Transparent
                     )
                 )
             }

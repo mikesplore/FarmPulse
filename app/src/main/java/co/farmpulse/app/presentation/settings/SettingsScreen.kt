@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,184 +20,132 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.ui.theme.*
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SettingsUiState
-// ─────────────────────────────────────────────────────────────────────────────
-
-data class SettingsUiState(
-    // Usage
-    val isLoadingUsage:      Boolean = true,
-    val requestsUsed:        Int     = 0,
-    val requestsLimit:       Int     = 1000,
-    val requestsRemaining:   Int     = 1000,
-    val aiRequestsUsed:      Int     = 0,
-    val aiRequestsLimit:     Int     = 200,
-    val aiRequestsRemaining: Int     = 200,
-    val planName:            String  = "free",
-    val maxDays:             Int     = 7,
-    val periodEnd:           String? = null,
-
-    // Preferences (persisted in DataStore)
-    val aiEnabled:    Boolean = true,
-    val lang:         String  = "en",   // "en" | "sw"
-    val units:        String  = "metric",
-
-    // Location override
-    val ipCity:       String? = null,
-    val cityOverride: String  = "",
-    val latOverride:  String  = "",
-    val lonOverride:  String  = ""
-)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SettingsScreen
-//
-// New screen. Wired into MainScreen.kt via Screen.Settings route.
-// ViewModel: SettingsViewModel (see SettingsViewModel.kt file).
-// ─────────────────────────────────────────────────────────────────────────────
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
-            .verticalScroll(rememberScrollState())
+    PullToRefreshBox(
+        isRefreshing = state.isLoadingUsage,
+        onRefresh = { viewModel.loadUsage() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Settings",
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Medium,
-            color = OnSurfaceCharcoal,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // ── API Usage ────────────────────────────────────────────────────────
-        SettingsSectionLabel("API usage this month")
-        UsageCard(state = state)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── AI & Language ────────────────────────────────────────────────────
-        SettingsSectionLabel("AI & language")
-        SettingsGroup {
-            // AI summaries toggle
-            SwitchRow(
-                label    = "AI weather summaries",
-                subLabel = "Insight cards on Home & Forecast",
-                checked  = state.aiEnabled,
-                onToggle = { viewModel.setAiEnabled(it) },
-                icon     = Icons.Outlined.AutoAwesome
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundOffWhite)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Screen title — Updated to 22.sp Bold for consistency across major screens
+            Text(
+                text = "Settings",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = OnSurfaceCharcoal,
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
-            Divider()
-            // Language selector — EN / SW
-            SelectRow(
-                label   = "Summary language",
-                options = listOf("English" to "en", "Kiswahili" to "sw"),
-                current = state.lang,
-                onSelect = { viewModel.setLang(it) },
-                icon    = Icons.Outlined.Translate
-            )
+            
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── API Usage ────────────────────────────────────────────────────────
+            SettingsSectionLabel("API usage this month")
+            UsageCard(state = state)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── AI & Language ────────────────────────────────────────────────────
+            SettingsSectionLabel("AI & language")
+            SettingsGroup {
+                // AI summaries toggle
+                SwitchRow(
+                    label    = "AI weather summaries",
+                    subLabel = "Insight cards on Home & Forecast",
+                    checked  = state.aiEnabled,
+                    onToggle = { viewModel.setAiEnabled(it) },
+                    icon     = Icons.Outlined.AutoAwesome
+                )
+                Divider()
+                // Language selector — EN / SW
+                SelectRow(
+                    label   = "Summary language",
+                    options = listOf("English" to "en", "Kiswahili" to "sw"),
+                    current = state.lang,
+                    onSelect = { viewModel.setLang(it) },
+                    icon    = Icons.Outlined.Translate
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Units ────────────────────────────────────────────────────────────
+            SettingsSectionLabel("Units")
+            SettingsGroup {
+                SelectRow(
+                    label   = "Temperature",
+                    options = listOf("Metric (°C)" to "metric", "Imperial (°F)" to "imperial"),
+                    current = state.units,
+                    onSelect = { viewModel.setUnits(it) },
+                    icon    = Icons.Outlined.Thermostat
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Location ─────────────────────────────────────────────────────────
+            SettingsSectionLabel("Location")
+            SettingsGroup {
+                InfoRow(
+                    label    = "Auto-detected city",
+                    value    = state.ipCity ?: "Detecting…",
+                    subLabel = "From IP — may be inaccurate",
+                    icon     = Icons.Outlined.MyLocation
+                )
+                Divider()
+                LocationOverrideRow(
+                    cityOverride = state.cityOverride,
+                    latOverride  = state.latOverride,
+                    lonOverride  = state.lonOverride,
+                    onCityChange = { viewModel.setCityOverride(it) },
+                    onLatChange  = { viewModel.setLatOverride(it) },
+                    onLonChange  = { viewModel.setLonOverride(it) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Plan info ────────────────────────────────────────────────────────
+            SettingsSectionLabel("Plan")
+            SettingsGroup {
+                InfoRow(
+                    label = "Current plan",
+                    value = state.planName.replaceFirstChar { it.uppercase() },
+                    icon  = Icons.Outlined.Verified
+                )
+                Divider()
+                InfoRow(
+                    label    = "Forecast days",
+                    value    = "${state.maxDays} days",
+                    subLabel = "Maximum for your plan",
+                    icon     = Icons.Outlined.CalendarToday
+                )
+                Divider()
+                InfoRow(
+                    label    = "Period resets",
+                    value    = state.periodEnd ?: "—",
+                    icon     = Icons.Outlined.Refresh
+                )
+            }
+
+            Spacer(modifier = Modifier.height(80.dp))
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Units ────────────────────────────────────────────────────────────
-        SettingsSectionLabel("Units")
-        SettingsGroup {
-            SelectRow(
-                label   = "Temperature",
-                options = listOf("Metric (°C)" to "metric", "Imperial (°F)" to "imperial"),
-                current = state.units,
-                onSelect = { viewModel.setUnits(it) },
-                icon    = Icons.Outlined.Thermostat
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Location ─────────────────────────────────────────────────────────
-        // FIX: the server's ip_geo returns the ISP city (Nairobi for Kenyan ISPs),
-        // not the user's actual city. This section lets the user override it.
-        SettingsSectionLabel("Location")
-        SettingsGroup {
-            InfoRow(
-                label    = "Auto-detected city",
-                value    = state.ipCity ?: "Detecting…",
-                subLabel = "From IP — may be inaccurate",
-                icon     = Icons.Outlined.MyLocation
-            )
-            Divider()
-            // Text field for manual city override
-            LocationOverrideRow(
-                cityOverride = state.cityOverride,
-                latOverride  = state.latOverride,
-                lonOverride  = state.lonOverride,
-                onCityChange = { viewModel.setCityOverride(it) },
-                onLatChange  = { viewModel.setLatOverride(it) },
-                onLonChange  = { viewModel.setLonOverride(it) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Plan info ────────────────────────────────────────────────────────
-        SettingsSectionLabel("Plan")
-        SettingsGroup {
-            InfoRow(
-                label = "Current plan",
-                value = state.planName.replaceFirstChar { it.uppercase() },
-                icon  = Icons.Outlined.Verified
-            )
-            Divider()
-            InfoRow(
-                label    = "Forecast days",
-                value    = "${state.maxDays} days",
-                subLabel = "Maximum for your plan",
-                icon     = Icons.Outlined.CalendarToday
-            )
-            Divider()
-            InfoRow(
-                label    = "Period resets",
-                value    = state.periodEnd ?: "—",
-                icon     = Icons.Outlined.Refresh
-            )
-        }
-
-        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UsageCard
-// Shows request + AI request progress bars from /v1/usage response.
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 private fun UsageCard(state: SettingsUiState) {
-    if (state.isLoadingUsage) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .height(80.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(SurfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(
-                color = ForestGreen,
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
-            )
-        }
-        return
-    }
-
+    // If not refreshing (isLoadingUsage managed by PullToRefreshBox), show content
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,10 +210,6 @@ private fun UsageBar(label: String, used: Int, limit: Int, remaining: Int) {
     Text("$remaining remaining", fontSize = 11.sp, color = SecondaryText)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Location override row
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 private fun LocationOverrideRow(
     cityOverride: String,
@@ -322,10 +267,6 @@ private fun LocationOverrideRow(
         )
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Reusable settings components
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsSectionLabel(text: String) {
@@ -473,6 +414,3 @@ private fun settingsTextFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor      = SecondaryText,
     focusedLabelColor        = ForestGreen
 )
-
-
-

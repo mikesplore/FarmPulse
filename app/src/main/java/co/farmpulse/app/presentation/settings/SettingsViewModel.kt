@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.farmpulse.app.data.local.prefs.UserPreferencesRepository
 import co.farmpulse.app.data.repository.WeatherRepository
+import co.farmpulse.app.util.SnackbarManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,10 +14,36 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class SettingsUiState(
+    // Usage
+    val isLoadingUsage:      Boolean = true,
+    val requestsUsed:        Int     = 0,
+    val requestsLimit:       Int     = 1000,
+    val requestsRemaining:   Int     = 1000,
+    val aiRequestsUsed:      Int     = 0,
+    val aiRequestsLimit:     Int     = 200,
+    val aiRequestsRemaining: Int     = 200,
+    val planName:            String  = "free",
+    val maxDays:             Int     = 7,
+    val periodEnd:           String? = null,
+
+    // Preferences (persisted in DataStore)
+    val aiEnabled:    Boolean = true,
+    val lang:         String  = "en",   // "en" | "sw"
+    val units:        String  = "metric",
+
+    // Location override
+    val ipCity:       String? = null,
+    val cityOverride: String  = "",
+    val latOverride:  String  = "",
+    val lonOverride:  String  = ""
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: WeatherRepository,
-    private val prefsRepository: UserPreferencesRepository
+    private val prefsRepository: UserPreferencesRepository,
+    private val snackbarManager: SnackbarManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -78,6 +105,9 @@ class SettingsViewModel @Inject constructor(
                         currentState.copy(isLoadingUsage = false, ipCity = detectedCity ?: currentState.ipCity)
                     }
                 } else {
+                    // Show error via global snackbar
+                    val errorMsg = res.exceptionOrNull()?.message ?: "Failed to load usage data"
+                    snackbarManager.showMessage(errorMsg)
                     currentState.copy(isLoadingUsage = false, ipCity = detectedCity ?: currentState.ipCity)
                 }
             }

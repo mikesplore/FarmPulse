@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Park
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,57 +26,71 @@ import co.farmpulse.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(viewModel: HistoryViewModel, onNavigateToResult: (TreeAnalysisResult) -> Unit, onNewScan: () -> Unit) {
-    val history by viewModel.history.collectAsState()
+fun HistoryScreen(
+    viewModel: HistoryViewModel,
+    onNavigateToResult: (TreeAnalysisResult) -> Unit,
+    onNewScan: () -> Unit
+) {
+    val state by viewModel.uiState.collectAsState()
     
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
-            .padding(horizontal = 16.dp)
+    PullToRefreshBox(
+        isRefreshing = state.isLoading,
+        onRefresh = { viewModel.refreshHistory() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "Scan history",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundOffWhite)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Screen title — Updated to be Bold and Larger for consistency
+            Text(
+                text = "Scan history",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
                 color = OnSurfaceCharcoal
             )
-        )
-        
-        Text(
-            text = "${history.size} analyses total", // Simplified for now
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 12.sp,
-                color = SecondaryText
-            ),
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-        )
+            
+            Text(
+                text = "${state.items.size} analyses total",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 12.sp,
+                    color = SecondaryText
+                ),
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
 
-        if (history.isEmpty()) {
-            EmptyHistory(onNewScan)
-        } else {
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp)),
-                colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                LazyColumn(modifier = Modifier.padding(horizontal = 14.dp)) {
-                    itemsIndexed(history) { index, item ->
-                        HistoryItem(item, onClick = { onNavigateToResult(item) })
-                        if (index < history.size - 1) {
-                            HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+            if (state.items.isEmpty()) {
+                EmptyHistory(onNewScan)
+            } else {
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp)),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 14.dp)
+                    ) {
+                        itemsIndexed(state.items) { index, item ->
+                            HistoryItem(item, onClick = { onNavigateToResult(item) })
+                            if (index < state.items.size - 1) {
+                                HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                            }
                         }
                     }
                 }
+                
+                QuotaFooter(remaining = 3, onNewScan = onNewScan)
             }
-            
-            QuotaFooter(remaining = 3, onNewScan = onNewScan) // Remaining hardcoded for now
         }
     }
 }
@@ -109,13 +124,13 @@ fun HistoryItem(item: TreeAnalysisResult, onClick: () -> Unit) {
                 .padding(horizontal = 10.dp)
         ) {
             Text(
-                text = "Farm Analysis", // Name would come from result if available
+                text = "Farm Analysis",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = OnSurfaceCharcoal
             )
             Text(
-                text = "${item.totalTreeCount} trees · Jun 4", // Date placeholder
+                text = "${item.totalTreeCount} trees · Jun 4",
                 fontSize = 11.sp,
                 color = SecondaryText
             )
@@ -127,7 +142,6 @@ fun HistoryItem(item: TreeAnalysisResult, onClick: () -> Unit) {
 
 @Composable
 fun HealthBadge(result: TreeAnalysisResult) {
-    // Simplified logic for demo based on confidence/total as placeholder
     val status = when {
         result.confidenceScore >= 0.8 -> "Healthy"
         result.confidenceScore >= 0.5 -> "Needs care"

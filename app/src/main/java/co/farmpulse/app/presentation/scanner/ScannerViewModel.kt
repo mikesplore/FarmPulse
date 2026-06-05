@@ -7,9 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.farmpulse.app.data.repository.TreeRepository
 import co.farmpulse.app.domain.model.TreeAnalysisResult
+import co.farmpulse.app.util.NetworkMonitor
+import co.farmpulse.app.util.SnackbarManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -20,18 +25,22 @@ import javax.inject.Inject
 data class ScannerUiState(
     val selectedImageUri: Uri? = null,
     val isAnalyzing: Boolean = false,
+    val isRefreshing: Boolean = false,
     val result: TreeAnalysisResult? = null,
     val error: String? = null,
     val quotaUsed: Int = 2,
     val quotaLimit: Int = 5,
     val quotaResetsAt: String = "Jul 1",
     val county: String = "",
-    val acres: String = ""
+    val acres: String = "",
+    val isOffline: Boolean = false
 )
 
 @HiltViewModel
 class ScannerViewModel @Inject constructor(
-    private val repository: TreeRepository
+    private val repository: TreeRepository,
+    private val networkMonitor: NetworkMonitor,
+    private val snackbarManager: SnackbarManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScannerUiState())
@@ -39,12 +48,24 @@ class ScannerViewModel @Inject constructor(
 
     private var cameraImageUri: Uri? = null
 
+    init {
+        observeNetwork()
+    }
+
+    private fun observeNetwork() {
+        viewModelScope.launch {
+            networkMonitor.isOnlineFlow.collectLatest { isOnline ->
+                _uiState.update { it.copy(isOffline = !isOnline) }
+            }
+        }
+    }
+
     fun onImageSelected(uri: Uri) {
-        _uiState.value = _uiState.value.copy(
+        _uiState.update { it.copy(
             selectedImageUri = uri,
             result = null,
             error = null
-        )
+        ) }
     }
 
     fun prepareCameraUri(context: Context): Uri {
@@ -59,21 +80,29 @@ class ScannerViewModel @Inject constructor(
     }
 
     fun onCameraImageCaptured() {
-        cameraImageUri?.let {
-            _uiState.value = _uiState.value.copy(
-                selectedImageUri = it,
+        cameraImageUri?.let { uri ->
+            _uiState.update { it.copy(
+                selectedImageUri = uri,
                 result = null,
                 error = null
-            )
+            ) }
+        }
+    }
+
+    fun refreshQuota() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            delay(1000)
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
     fun onCountyChanged(newCounty: String) {
-        _uiState.value = _uiState.value.copy(county = newCounty)
+        _uiState.update { it.copy(county = newCounty) }
     }
 
     fun onAcresChanged(newAcres: String) {
-        _uiState.value = _uiState.value.copy(acres = newAcres)
+        _uiState.update { it.copy(acres = newAcres) }
     }
 
     fun analyzeImage(context: Context, farmerId: String = "test-001", notes: String = "") {
@@ -82,32 +111,43 @@ class ScannerViewModel @Inject constructor(
         val acres = _uiState.value.acres
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
+            _uiState.update { it.copy(isAnalyzing = true, error = null) }
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bytes = inputStream?.readBytes() ?: throw Exception("Unable to read image")
-                val requestBody = bytes.toRequestBody("image/*".toMediaType())
-                val imagePart = MultipartBody.Part.createFormData("image", "farm.jpg", requestBody)
+                
+                // Fix: Get specific MimeType instead of image/*
+                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                val requestBody = bytes.toRequestBody(mimeType.toMediaType())
+                
+                val fileName = when(mimeType) {
+                    "image/png" -> "farm.png"
+                    "image/webp" -> "farm.webp"
+                    else -> "farm.jpg"
+                }
+                val imagePart = MultipartBody.Part.createFormData("image", fileName, requestBody)
 
                 val result = repository.analyzeTrees(imagePart, farmerId, county, acres, notes)
                 if (result.isSuccess) {
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.update { it.copy(
                         isAnalyzing = false,
                         result = result.getOrNull(),
-                        quotaUsed = _uiState.value.quotaUsed + 1
-                    )
+                        quotaUsed = it.quotaUsed + 1
+                    ) }
                 } else {
-                    _uiState.value = _uiState.value.copy(
-                        isAnalyzing = false,
-                        error = result.exceptionOrNull()?.message ?: "Analysis failed"
-                    )
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Analysis failed"
+                    _uiState.update { it.copy(isAnalyzing = false, error = errorMsg) }
+                    snackbarManager.showMessage(errorMsg)
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isAnalyzing = false,
-                    error = e.message ?: "Unknown error occurred"
-                )
+                val errorMsg = e.message ?: "Unknown error occurred"
+                _uiState.update { it.copy(isAnalyzing = false, error = errorMsg) }
+                snackbarManager.showMessage(errorMsg)
             }
         }
+    }
+
+    fun clearResult() {
+        _uiState.update { it.copy(result = null) }
     }
 }

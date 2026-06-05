@@ -8,12 +8,14 @@ import co.farmpulse.app.data.remote.dto.TreeAnalysisResponse
 import co.farmpulse.app.domain.model.TreeAnalysisResult
 import co.farmpulse.app.util.NetworkMonitor
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import retrofit2.HttpException
 
 /**
  * Repository for tree analysis operations. Saves results to Room for history.
@@ -33,7 +35,7 @@ class TreeRepository @Inject constructor(
         notes: String
     ): Result<TreeAnalysisResult> {
         if (!networkMonitor.isOnline()) {
-            return Result.failure(Exception("No network available"))
+            return Result.failure(Exception("No network available. Please check your connection."))
         }
 
         return try {
@@ -67,8 +69,18 @@ class TreeRepository @Inject constructor(
             )
 
             Result.success(domain)
+        } catch (e: HttpException) {
+            // Parse error message from server response
+            val errorBody = e.response()?.errorBody()?.string()
+            val errorMessage = try {
+                val json = gson.fromJson(errorBody, JsonObject::class.java)
+                json.get("message")?.asString ?: json.get("error")?.asString ?: "Server error"
+            } catch (_: Exception) {
+                "Server error: ${e.code()}"
+            }
+            Result.failure(Exception(errorMessage))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Analysis failed"))
         }
     }
 

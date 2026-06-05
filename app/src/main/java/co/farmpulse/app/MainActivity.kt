@@ -12,6 +12,8 @@ import co.farmpulse.app.presentation.history.HistoryViewModel
 import co.farmpulse.app.presentation.scanner.ScannerViewModel
 import co.farmpulse.app.presentation.settings.SettingsViewModel
 import co.farmpulse.app.presentation.main.MainScreen
+import co.farmpulse.app.util.SnackbarManager
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -21,16 +23,20 @@ class MainActivity : ComponentActivity() {
     private val historyViewModel: HistoryViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
 
+    @Inject
+    lateinit var snackbarManager: SnackbarManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            FarmPulseTheme(darkTheme = false) { // Design reference uses off-white background
+            FarmPulseTheme(darkTheme = false) {
                 MainScreen(
                     homeViewModel = homeViewModel,
                     forecastViewModel = forecastViewModel,
                     scannerViewModel = scannerViewModel,
                     historyViewModel = historyViewModel,
-                    settingsViewModel = settingsViewModel
+                    settingsViewModel = settingsViewModel,
+                    snackbarManager = snackbarManager
                 )
             }
         }

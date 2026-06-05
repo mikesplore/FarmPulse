@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Thunderstorm
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,88 +37,95 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForecastScreen(viewModel: ForecastViewModel) {
     val state by viewModel.uiState.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundOffWhite)
+    PullToRefreshBox(
+        isRefreshing = state.isLoading,
+        onRefresh = { viewModel.loadForecast() },
+        modifier = Modifier.fillMaxSize()
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .background(BackgroundOffWhite)
         ) {
-            // ── Hero Section (Integrated Image + Title + Location) ───────────
-            ForecastHero(
-                location = state.locationLabel.ifBlank { "Locating..." },
-                title = "7-day forecast"
-            )
-
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
+                // ── Hero Section (Integrated Image + Title + Location) ───────────
+                ForecastHero(
+                    location = state.locationLabel.ifBlank { "Locating..." },
+                    title = "7-day forecast"
+                )
 
-                // ── Weekly Highlights ─────────────────────────────────────────
-                if (state.daily.isNotEmpty()) {
-                    ForecastSummaryCard(state.daily)
-                    Spacer(modifier = Modifier.height(32.dp))
-                }
-
-                // ── AI Insight section (Forecast) ─────────────────────────────
-                if (state.aiEnabled) {
-                    AiInsightSection(
-                        summary = state.aiSummary,
-                        isLoading = state.isLoading && state.aiSummary == null,
-                        onGetInsight = { viewModel.loadForecast() }
-                    )
-                    Spacer(modifier = Modifier.height(32.dp))
-                }
-
-                // ── Main Forecast Card ────────────────────────────────────────
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-                    shape = RoundedCornerShape(16.dp)
+                        .padding(horizontal = 20.dp)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        if (state.isLoading && state.daily.isEmpty()) {
-                            repeat(7) { ShimmerForecastRow() }
-                        } else {
-                            state.daily.forEachIndexed { index, day ->
-                                DayRow(day = day, isToday = index == 0)
-                                if (index < state.daily.size - 1) {
-                                    HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // ── Weekly Highlights ─────────────────────────────────────────
+                    if (state.daily.isNotEmpty()) {
+                        ForecastSummaryCard(state.daily)
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+
+                    // ── AI Insight section (Forecast) ─────────────────────────────
+                    if (state.aiEnabled) {
+                        AiInsightSection(
+                            summary = state.aiSummary,
+                            isLoading = state.isLoading && state.aiSummary == null,
+                            onGetInsight = { viewModel.loadForecast() }
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+
+                    // ── Main Forecast Card ────────────────────────────────────────
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            if (state.isLoading && state.daily.isEmpty()) {
+                                repeat(7) { ShimmerForecastRow() }
+                            } else {
+                                state.daily.forEachIndexed { index, day ->
+                                    DayRow(day = day, isToday = index == 0)
+                                    if (index < state.daily.size - 1) {
+                                        HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                                    }
                                 }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // ── Rain Probability Section ──────────────────────────────────
+                    SectionHeading("Rain probability")
+                    RainProbabilityChart(daily = state.daily, isLoading = state.isLoading && state.daily.isEmpty())
+
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
-
-                Spacer(modifier = Modifier.height(40.dp))
-
-                // ── Rain Probability Section ──────────────────────────────────
-                SectionHeading("Rain probability")
-                RainProbabilityChart(daily = state.daily, isLoading = state.isLoading && state.daily.isEmpty())
-
-                Spacer(modifier = Modifier.height(80.dp))
             }
-        }
 
-        // Initial Loading Overlay
-        AnimatedVisibility(
-            visible = state.isLoading && state.daily.isEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            LoadingOverlay("Synchronizing forecast...")
+            // Initial Loading Overlay (only for first load)
+            AnimatedVisibility(
+                visible = state.isLoading && state.daily.isEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                LoadingOverlay("Synchronizing forecast...")
+            }
         }
     }
 }
