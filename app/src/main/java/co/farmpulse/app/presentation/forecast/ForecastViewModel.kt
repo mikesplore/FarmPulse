@@ -15,6 +15,7 @@ data class ForecastUiState(
     val isLoading: Boolean = false,
     val hourly: List<HourlyForecastDto> = emptyList(),
     val daily: List<DailyForecastDto> = emptyList(),
+    val locationLabel: String = "",
     val error: String? = null
 )
 
@@ -36,13 +37,21 @@ class ForecastViewModel @Inject constructor(
             val res = repository.getFullWeather()
             if (res.isSuccess) {
                 val v = res.getOrNull()
+                val city = v?.response?.ipGeo?.city ?: v?.response?.location?.country ?: "Unknown"
+                val region = v?.response?.ipGeo?.region ?: ""
+                val label = if (region.isNotBlank()) "$city, $region" else city
+                
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     hourly = v?.response?.hourly ?: emptyList(),
-                    daily = v?.response?.daily ?: emptyList()
+                    daily = v?.response?.daily ?: emptyList(),
+                    locationLabel = label
                 )
             } else {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = res.exceptionOrNull()?.message)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false, 
+                    error = res.exceptionOrNull()?.message
+                )
             }
         }
     }

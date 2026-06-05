@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.domain.model.TreeAnalysisResult
-import co.farmpulse.app.presentation.home.SectionHeading
+import co.farmpulse.app.presentation.components.SectionHeading
 import co.farmpulse.app.ui.theme.*
 import coil.compose.AsyncImage
 

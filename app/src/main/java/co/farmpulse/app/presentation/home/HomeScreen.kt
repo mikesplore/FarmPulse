@@ -1,11 +1,16 @@
 package co.farmpulse.app.presentation.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,14 +19,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.data.remote.dto.HourlyForecastDto
-import co.farmpulse.app.presentation.components.OfflineBanner
+import co.farmpulse.app.presentation.components.*
 import co.farmpulse.app.ui.theme.*
+import coil.compose.AsyncImage
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -29,219 +39,264 @@ import java.time.format.DateTimeFormatter
 fun HomeScreen(viewModel: HomeViewModel) {
     val state by viewModel.uiState.collectAsState()
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundOffWhite)
-            .verticalScroll(rememberScrollState())
     ) {
-        // Only show OfflineBanner if data is from cache
-        if (state.isFromCache && state.cachedAt != null) {
-            OfflineBanner(cachedAt = state.cachedAt!!)
-        }
-
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
-            // TempHero (Center-aligned)
-            TempHero(
+            // ── Hero Section with Image ───────────────────────────────────────
+            HomeHero(
                 city = state.city,
                 region = state.region,
                 temp = state.current?.temperature,
-                condition = state.current?.conditionCode // This would ideally map to a string like "Partly Cloudy"
+                condition = getConditionText(state.current?.conditionCode)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                // Offline banner (bleeds into padding or stays inside)
+                if (state.isFromCache && state.cachedAt != null) {
+                    Spacer(modifier = Modifier.height(13.dp))
+                    OfflineBanner(cachedAt = state.cachedAt!!)
+                }
 
-            // StatRow (3 equal chips)
-            StatRow(
-                humidity = state.hourly.firstOrNull()?.humidity?.toInt(),
-                windSpeed = state.current?.windSpeed,
-                feelsLike = state.hourly.firstOrNull()?.feelsLike
-            )
+                Spacer(modifier = Modifier.height(32.dp))
 
-            Spacer(modifier = Modifier.height(10.dp))
+                // ── StatRow (Primary Metrics) ─────────────────────────────────
+                val currentHourly = state.hourly.firstOrNull()
+                StatRow(
+                    humidity = currentHourly?.humidity?.toInt(),
+                    windSpeed = state.current?.windSpeed,
+                    feelsLike = currentHourly?.feelsLike
+                )
 
-            // AI Insight Card
-            AiInsightSection(
-                summary = state.aiSummary,
-                isLoading = state.isLoadingAiSummary,
-                onGetInsight = { viewModel.loadAiSummary() }
-            )
+                Spacer(modifier = Modifier.height(32.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
+                // ── AI Insight section ────────────────────────────────────────
+                AiInsightSection(
+                    summary = state.aiSummary,
+                    isLoading = state.isLoadingAiSummary,
+                    onGetInsight = { viewModel.loadAiSummary() }
+                )
 
-            // Next 6 hours Section
-            SectionHeading("Next 6 hours")
-            
-            val next6Hours = state.hourly.take(6)
-            HourlyStrip(next6Hours)
+                Spacer(modifier = Modifier.height(15.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
+                // ── Next 6 Hours ──────────────────────────────────────────────
+                SectionHeading(text = "Next 6 hours")
+                HourlyStrip(hours = state.hourly.take(6))
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ── Today's Details Grid ──────────────────────────────────────
+                SectionHeading(text = "Today's details")
+                DetailsGrid(state)
+
+                Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+
+        // Global Loading Overlay
+        AnimatedVisibility(
+            visible = state.isLoading && state.current == null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            LoadingOverlay("Synchronizing farm data...")
         }
     }
 }
 
 @Composable
-fun TempHero(city: String, region: String, temp: Double?, condition: String?) {
-    Column(
+private fun HomeHero(city: String, region: String, temp: Double?, condition: String?) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .height(200.dp) // Taller hero for home
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.Place,
-                contentDescription = null,
-                modifier = Modifier.size(13.dp),
-                tint = SecondaryText
-            )
-            Spacer(modifier = Modifier.width(4.dp))
+        AsyncImage(
+            model = "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?q=80&w=1000&auto=format&fit=crop",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Place, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (city.isNotBlank()) "$city, $region" else "Locating farm...",
+                    fontSize = 16.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
             Text(
-                text = if (region.isNotBlank()) "$city, $region" else city,
-                fontSize = 13.sp,
-                color = SecondaryText
+                text = "${temp?.toInt() ?: "--"}°",
+                fontSize = 110.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                lineHeight = 110.sp
+            )
+
+            Text(
+                text = condition ?: "Analyzing sky...",
+                fontSize = 22.sp,
+                color = Color.White.copy(alpha = 0.9f),
+                fontWeight = FontWeight.Normal
             )
         }
-        
-        Text(
-            text = "${temp?.toInt() ?: "--"}°",
-            fontSize = 72.sp,
-            fontWeight = FontWeight.Medium,
-            color = OnSurfaceCharcoal
-        )
-        
-        Text(
-            text = "Partly cloudy", // Placeholder for actual condition text mapping
-            fontSize = 15.sp,
-            color = SecondaryText
-        )
     }
 }
 
 @Composable
-fun StatRow(humidity: Int?, windSpeed: Double?, feelsLike: Double?) {
+private fun StatRow(humidity: Int?, windSpeed: Double?, feelsLike: Double?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        StatChip(modifier = Modifier.weight(1f), value = "${humidity ?: "--"}%", label = "Humidity")
-        StatChip(modifier = Modifier.weight(1f), value = "${windSpeed?.toInt() ?: "--"} km/h", label = "Wind")
-        StatChip(modifier = Modifier.weight(1f), value = "${feelsLike?.toInt() ?: "--"}°", label = "Feels like")
+        StatChip(Modifier.weight(1f), "${humidity ?: "--"}%", "Humidity")
+        StatChip(Modifier.weight(1f), "${windSpeed?.toInt() ?: "--"} km/h", "Wind")
+        StatChip(Modifier.weight(1f), "${feelsLike?.toInt() ?: "--"}°", "Feels like")
     }
 }
 
 @Composable
-fun StatChip(modifier: Modifier, value: String, label: String) {
+private fun StatChip(modifier: Modifier, value: String, label: String) {
     Column(
         modifier = modifier
-            .background(SurfaceVariant, RoundedCornerShape(10.dp))
-            .padding(vertical = 10.dp),
+            .background(SurfaceVariant, RoundedCornerShape(14.dp))
+            .padding(vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = value, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = OnSurfaceCharcoal)
-        Text(text = label, fontSize = 11.sp, color = SecondaryText)
+        Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnSurfaceCharcoal)
+        Text(text = label, fontSize = 13.sp, color = SecondaryText)
     }
 }
 
 @Composable
-fun AiInsightSection(summary: String?, isLoading: Boolean, onGetInsight: () -> Unit) {
-    if (summary == null && !isLoading) {
-        OutlinedButton(
-            onClick = onGetInsight,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, ForestGreen),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ForestGreen)
-        ) {
-            Text("Get AI insight →", fontWeight = FontWeight.Medium)
-        }
-    } else {
-        Card(
-            modifier = Modifier.fillMaxWidth().border(0.5.dp, Color(0xFFB8DAC5), RoundedCornerShape(14.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF4EE)),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+private fun AiInsightSection(summary: String?, isLoading: Boolean, onGetInsight: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, if (summary != null) Color(0xFFB8DAC5) else BorderGrey, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = if (summary != null) Color(0xFFEAF4EE) else SurfaceWhite),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.AutoAwesome, null, modifier = Modifier.size(11.dp), tint = ForestGreen)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("AI INSIGHT", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = ForestGreen, letterSpacing = 0.06.sp)
+                    Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp), tint = ForestGreen)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("AI INSIGHT", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = ForestGreen, letterSpacing = 0.1.sp)
                 }
-                Spacer(modifier = Modifier.height(5.dp))
-                if (isLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = ForestGreen, trackColor = Color(0xFFB8DAC5).copy(alpha = 0.3f))
-                } else {
-                    Text(text = summary ?: "", fontSize = 13.sp, color = ForestGreen, lineHeight = 20.sp)
+                if (summary == null && !isLoading) {
+                    TextButton(onClick = onGetInsight, contentPadding = PaddingValues(0.dp)) {
+                        Text("Get insight →", fontSize = 14.sp, color = ForestGreen, fontWeight = FontWeight.Bold)
+                    }
                 }
+            }
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = ForestGreen, trackColor = Color(0xFFB8DAC5).copy(alpha = 0.3f))
+            } else if (summary != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = summary, fontSize = 16.sp, color = ForestGreen, lineHeight = 26.sp, fontWeight = FontWeight.Normal)
             }
         }
     }
 }
 
 @Composable
-fun SectionHeading(text: String) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = SecondaryText,
-            letterSpacing = 0.8.sp
-        ),
-        modifier = Modifier.padding(top = 20.dp, bottom = 10.dp)
-    )
-}
-
-@Composable
-fun HourlyStrip(hours: List<HourlyForecastDto>) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 2.dp)
-    ) {
-        itemsIndexed(hours) { index, hour ->
-            HourlyCell(hour, isActive = index == 1) // Using index 1 as "Active" to match mockup visual
+private fun DetailsGrid(state: HomeUiState) {
+    val daily = state.daily.firstOrNull()
+    val hourly = state.hourly.firstOrNull()
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            DetailCard(Modifier.weight(1f), "Sunrise", daily?.sunrise?.takeLast(5) ?: "--", Icons.Outlined.WbTwilight)
+            DetailCard(Modifier.weight(1f), "Sunset", daily?.sunset?.takeLast(5) ?: "--", Icons.Outlined.WbTwilight)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            DetailCard(Modifier.weight(1f), "UV Index", hourly?.uvIndex?.toInt()?.toString() ?: "--", Icons.Outlined.WbSunny)
+            DetailCard(Modifier.weight(1f), "Rain Chance", "${daily?.precipitationProbability?.toInt() ?: "--"}%", Icons.Outlined.Umbrella)
         }
     }
 }
 
 @Composable
-fun HourlyCell(hour: HourlyForecastDto, isActive: Boolean) {
-    val time = try {
-        val dt = LocalDateTime.parse(hour.time)
-        dt.format(DateTimeFormatter.ofPattern("ha"))
-    } catch (e: Exception) {
-        "12PM"
-    }
-
-    val isRainy = (hour.precipitationProbability ?: 0.0) >= 60.0
-
-    Column(
-        modifier = Modifier
-            .width(52.dp)
-            .background(if (isActive) ForestGreen else SurfaceVariant, RoundedCornerShape(10.dp))
-            .padding(vertical = 10.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun DetailCard(modifier: Modifier, label: String, value: String, icon: ImageVector) {
+    Card(
+        modifier = modifier.border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Text(text = if (isActive && hour.time == null) "Now" else time, fontSize = 10.sp, color = if (isActive) Color(0xFFD4F2E1) else SecondaryText)
-        Icon(
-            imageVector = getIconForCondition(hour.conditionCode),
-            contentDescription = null,
-            modifier = Modifier.padding(vertical = 4.dp).size(16.dp),
-            tint = if (isActive) Color.White else if (isRainy) AccentAmber else ForestGreen
-        )
-        Text(text = "${hour.temperature?.toInt() ?: "--"}°", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (isActive) Color.White else OnSurfaceCharcoal)
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, modifier = Modifier.size(24.dp), tint = SecondaryText)
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(text = label, fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.Medium)
+                Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnSurfaceCharcoal)
+            }
+        }
     }
 }
 
-fun getIconForCondition(code: String?): ImageVector {
-    return when (code) {
-        "0", "1" -> Icons.Outlined.WbSunny
-        "2", "3" -> Icons.Outlined.Cloud
-        "51", "53", "55", "80", "81" -> Icons.Outlined.Umbrella // Using Umbrella for rain
-        else -> Icons.Outlined.WbCloudy
+@Composable
+private fun HourlyStrip(hours: List<HourlyForecastDto>) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 4.dp)
+    ) {
+        itemsIndexed(hours) { index, hour ->
+            HourlyCell(hour = hour, isNow = index == 0)
+        }
+    }
+}
+
+@Composable
+private fun HourlyCell(hour: HourlyForecastDto, isNow: Boolean) {
+    val timeLabel = if (isNow) "Now" else {
+        try { LocalDateTime.parse(hour.time).format(DateTimeFormatter.ofPattern("ha")) } catch (e: Exception) { "--" }
+    }
+    val bgColor = if (isNow) ForestGreen else SurfaceVariant
+    val contentColor = if (isNow) Color.White else OnSurfaceCharcoal
+    Column(
+        modifier = Modifier.width(72.dp).background(bgColor, RoundedCornerShape(14.dp)).padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = timeLabel, fontSize = 11.sp, color = if (isNow) Color(0xFFD4F2E1) else SecondaryText)
+        Spacer(modifier = Modifier.height(10.dp))
+        Icon(getIconForCondition(hour.conditionCode), null, modifier = Modifier.size(24.dp), tint = if (isNow) Color.White else ForestGreen)
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(text = "${hour.temperature?.toInt() ?: "--"}°", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = contentColor)
     }
 }
