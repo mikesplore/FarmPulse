@@ -7,7 +7,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +22,8 @@ data class UserPreferences(
     val units: String,
     val cityOverride: String,
     val latOverride: String,
-    val lonOverride: String
+    val lonOverride: String,
+    val apiKey: String
 )
 
 @Singleton
@@ -34,6 +37,7 @@ class UserPreferencesRepository @Inject constructor(
         val CITY_OVERRIDE = stringPreferencesKey("city_override")
         val LAT_OVERRIDE = stringPreferencesKey("lat_override")
         val LON_OVERRIDE = stringPreferencesKey("lon_override")
+        val API_KEY = stringPreferencesKey("api_key")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -51,9 +55,14 @@ class UserPreferencesRepository @Inject constructor(
                 units = preferences[PreferencesKeys.UNITS] ?: "metric",
                 cityOverride = preferences[PreferencesKeys.CITY_OVERRIDE] ?: "",
                 latOverride = preferences[PreferencesKeys.LAT_OVERRIDE] ?: "",
-                lonOverride = preferences[PreferencesKeys.LON_OVERRIDE] ?: ""
+                lonOverride = preferences[PreferencesKeys.LON_OVERRIDE] ?: "",
+                apiKey = preferences[PreferencesKeys.API_KEY] ?: ""
             )
         }
+
+    fun getApiKeyBlocking(): String = runBlocking {
+        context.dataStore.data.first()[PreferencesKeys.API_KEY] ?: ""
+    }
 
     suspend fun updateAiEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
@@ -78,6 +87,12 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.CITY_OVERRIDE] = city
             preferences[PreferencesKeys.LAT_OVERRIDE] = lat
             preferences[PreferencesKeys.LON_OVERRIDE] = lon
+        }
+    }
+
+    suspend fun updateApiKey(apiKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.API_KEY] = apiKey
         }
     }
 }

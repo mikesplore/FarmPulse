@@ -38,7 +38,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
         ) {
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Screen title — Consistent 22.sp Bold
+            // Screen title
             Text(
                 text = "Settings",
                 fontSize = 22.sp,
@@ -49,16 +49,46 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── API Usage ────────────────────────────────────────────────────────
-            SettingsSectionLabel("API usage this month")
-            UsageCard(state = state)
+            // ── API Configuration ────────────────────────────────────────────────
+            SettingsSectionLabel("API Configuration")
+            SettingsGroup {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Key, null, modifier = Modifier.size(20.dp), tint = SecondaryText)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Weather AI API Key", fontSize = 15.sp, color = OnSurfaceCharcoal, fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = state.apiKey,
+                        onValueChange = { viewModel.setApiKey(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Paste your API key here", fontSize = 13.sp, color = SecondaryText) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = settingsTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Get your key from weather-ai.co dashboard.",
+                        fontSize = 12.sp,
+                        color = SecondaryText
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // ── API Usage ────────────────────────────────────────────────────────
+            if (state.apiKey.isNotBlank()) {
+                SettingsSectionLabel("API usage this month")
+                UsageCard(state = state)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             // ── AI & Language ────────────────────────────────────────────────────
             SettingsSectionLabel("AI & language")
             SettingsGroup {
-                // AI summaries toggle
                 SwitchRow(
                     label    = "AI weather summaries",
                     subLabel = "Insight cards on Home & Forecast",
@@ -67,7 +97,6 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     icon     = Icons.Outlined.AutoAwesome
                 )
                 Divider()
-                // Language selector — EN / SW
                 SelectRow(
                     label   = "Summary language",
                     options = listOf("English" to "en", "Kiswahili" to "sw"),
@@ -116,26 +145,28 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Plan info ────────────────────────────────────────────────────────
-            SettingsSectionLabel("Plan")
-            SettingsGroup {
-                InfoRow(
-                    label = "Current plan",
-                    value = state.planName.replaceFirstChar { it.uppercase() },
-                    icon  = Icons.Outlined.Verified
-                )
-                Divider()
-                InfoRow(
-                    label    = "Forecast days",
-                    value    = "${state.maxDays} days",
-                    subLabel = "Maximum for your plan",
-                    icon     = Icons.Outlined.CalendarToday
-                )
-                Divider()
-                InfoRow(
-                    label    = "Period resets",
-                    value    = state.periodEnd ?: "—",
-                    icon     = Icons.Outlined.Refresh
-                )
+            if (state.apiKey.isNotBlank()) {
+                SettingsSectionLabel("Plan")
+                SettingsGroup {
+                    InfoRow(
+                        label = "Current plan",
+                        value = state.planName.replaceFirstChar { it.uppercase() },
+                        icon  = Icons.Outlined.Verified
+                    )
+                    Divider()
+                    InfoRow(
+                        label    = "Forecast days",
+                        value    = "${state.maxDays} days",
+                        subLabel = "Maximum for your plan",
+                        icon     = Icons.Outlined.CalendarToday
+                    )
+                    Divider()
+                    InfoRow(
+                        label    = "Period resets",
+                        value = state.periodEnd ?: "—",
+                        icon  = Icons.Outlined.Refresh
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(80.dp))

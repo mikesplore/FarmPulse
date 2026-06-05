@@ -31,6 +31,7 @@ data class SettingsUiState(
     val aiEnabled:    Boolean = true,
     val lang:         String  = "en",   // "en" | "sw"
     val units:        String  = "metric",
+    val apiKey:       String  = "",
 
     // Location override
     val ipCity:       String? = null,
@@ -63,7 +64,8 @@ class SettingsViewModel @Inject constructor(
                     units = prefs.units,
                     cityOverride = prefs.cityOverride,
                     latOverride = prefs.latOverride,
-                    lonOverride = prefs.lonOverride
+                    lonOverride = prefs.lonOverride,
+                    apiKey = prefs.apiKey
                 ) }
             }
         }
@@ -107,7 +109,10 @@ class SettingsViewModel @Inject constructor(
                 } else {
                     // Show error via global snackbar
                     val errorMsg = res.exceptionOrNull()?.message ?: "Failed to load usage data"
-                    snackbarManager.showMessage(errorMsg)
+                    // Only show snackbar if we actually have an API key set, otherwise it's expected to fail
+                    if (_uiState.value.apiKey.isNotBlank()) {
+                        snackbarManager.showMessage(errorMsg)
+                    }
                     currentState.copy(isLoadingUsage = false, ipCity = detectedCity ?: currentState.ipCity)
                 }
             }
@@ -129,6 +134,14 @@ class SettingsViewModel @Inject constructor(
     fun setUnits(units: String) {
         viewModelScope.launch {
             prefsRepository.updateUnits(units)
+        }
+    }
+
+    fun setApiKey(apiKey: String) {
+        viewModelScope.launch {
+            prefsRepository.updateApiKey(apiKey)
+            // Reload usage when API key changes
+            loadUsage()
         }
     }
 

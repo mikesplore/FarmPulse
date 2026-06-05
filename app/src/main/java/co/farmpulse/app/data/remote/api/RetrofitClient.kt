@@ -1,5 +1,6 @@
 package co.farmpulse.app.data.remote.api
 
+import co.farmpulse.app.data.local.prefs.UserPreferencesRepository
 import com.google.gson.Gson
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -10,13 +11,14 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     private const val BASE_URL = "https://api.weather-ai.co/"
 
-    fun create(apiKey: String): Retrofit {
+    fun create(prefs: UserPreferencesRepository): Retrofit {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->
+                val apiKey = prefs.getApiKeyBlocking()
                 val request = chain.request().newBuilder()
                     .addHeader("Authorization", "Bearer $apiKey")
                     .build()
@@ -34,4 +36,3 @@ object RetrofitClient {
             .build()
     }
 }
-

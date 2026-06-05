@@ -2,15 +2,13 @@ package co.farmpulse.app.di
 
 import android.content.Context
 import androidx.room.Room
-import co.farmpulse.app.BuildConfig
 import co.farmpulse.app.data.local.db.FarmPulseDatabase
 import co.farmpulse.app.data.local.db.TreeAnalysisDao
 import co.farmpulse.app.data.local.db.WeatherDao
+import co.farmpulse.app.data.local.prefs.UserPreferencesRepository
 import co.farmpulse.app.data.remote.api.RetrofitClient
 import co.farmpulse.app.data.remote.api.TreeApiService
 import co.farmpulse.app.data.remote.api.WeatherApiService
-import co.farmpulse.app.data.repository.TreeRepository
-import co.farmpulse.app.data.repository.WeatherRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,7 +23,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(): Retrofit = RetrofitClient.create(BuildConfig.WEATHER_AI_KEY)
+    fun provideRetrofit(prefs: UserPreferencesRepository): Retrofit = RetrofitClient.create(prefs)
 
     @Provides
     @Singleton
@@ -65,7 +63,4 @@ object AppModule {
     @Singleton
     fun provideNetworkMonitor(@ApplicationContext context: Context): co.farmpulse.app.util.NetworkMonitor =
         co.farmpulse.app.util.NetworkMonitor(context)
-
-    // Repositories are provided via @Inject constructors
 }
-
