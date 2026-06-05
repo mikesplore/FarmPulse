@@ -1,5 +1,6 @@
 package co.farmpulse.app.presentation.home
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -43,7 +44,10 @@ fun HomeScreen(viewModel: HomeViewModel) {
 
     PullToRefreshBox(
         isRefreshing = state.isLoading,
-        onRefresh = { viewModel.loadWeather() },
+        onRefresh = {
+            viewModel.loadWeather()
+            Log.i("HomeScreen", "fetched Data ${state.current}")
+                    },
         modifier = Modifier.fillMaxSize()
     ) {
         Box(

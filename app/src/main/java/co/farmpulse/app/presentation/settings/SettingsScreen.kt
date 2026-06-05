@@ -49,6 +49,49 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             
             Spacer(modifier = Modifier.height(20.dp))
 
+            // ── Usage & Quotas ───────────────────────────────────────────────────
+            SettingsSectionLabel("Service usage this month")
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp))
+                    .background(SurfaceWhite, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                // Weather API Usage (Only if key is set)
+                if (state.apiKey.isNotBlank()) {
+                    UsageBar(
+                        label    = "Weather API requests",
+                        used     = state.requestsUsed,
+                        limit    = state.requestsLimit,
+                        remaining = state.requestsRemaining
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    UsageBar(
+                        label    = "Weather AI requests",
+                        used     = state.aiRequestsUsed,
+                        limit    = state.aiRequestsLimit,
+                        remaining = state.aiRequestsRemaining
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                // Farm Scanner Usage
+                UsageBar(
+                    label    = "Farm scanner analyses",
+                    used     = state.treeQuotaUsed,
+                    limit    = state.treeQuotaLimit,
+                    remaining = state.treeQuotaLimit - state.treeQuotaUsed,
+                    footer   = if (state.treeQuotaResetsAt.isNotBlank()) "Resets ${state.treeQuotaResetsAt}" else null
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
             // ── API Configuration ────────────────────────────────────────────────
             SettingsSectionLabel("API Configuration")
             SettingsGroup {
@@ -78,13 +121,6 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            // ── API Usage ────────────────────────────────────────────────────────
-            if (state.apiKey.isNotBlank()) {
-                SettingsSectionLabel("API usage this month")
-                UsageCard(state = state)
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
             // ── AI & Language ────────────────────────────────────────────────────
             SettingsSectionLabel("AI & language")
@@ -146,7 +182,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 
             // ── Plan info ────────────────────────────────────────────────────────
             if (state.apiKey.isNotBlank()) {
-                SettingsSectionLabel("Plan")
+                SettingsSectionLabel("Weather Plan")
                 SettingsGroup {
                     InfoRow(
                         label = "Current plan",
@@ -175,67 +211,51 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun UsageCard(state: SettingsUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp))
-            .background(SurfaceWhite, RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        UsageBar(
-            label    = "API requests",
-            used     = state.requestsUsed,
-            limit    = state.requestsLimit,
-            remaining = state.requestsRemaining
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        UsageBar(
-            label    = "AI requests",
-            used     = state.aiRequestsUsed,
-            limit    = state.aiRequestsLimit,
-            remaining = state.aiRequestsRemaining
-        )
-    }
-}
-
-@Composable
-private fun UsageBar(label: String, used: Int, limit: Int, remaining: Int) {
+private fun UsageBar(label: String, used: Int, limit: Int, remaining: Int, footer: String? = null) {
     val fraction = if (limit > 0) (used.toFloat() / limit).coerceIn(0f, 1f) else 0f
     val isNearLimit = fraction >= 0.8f
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, fontSize = 13.sp, color = SecondaryText)
-        Text(
-            text = "$used / $limit",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isNearLimit) AccentAmber else ForestGreen
-        )
-    }
-    Spacer(modifier = Modifier.height(6.dp))
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(SurfaceVariant)
-    ) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, fontSize = 13.sp, color = SecondaryText, fontWeight = FontWeight.Medium)
+            Text(
+                text = "$used / $limit",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isNearLimit) DangerTerracotta else ForestGreen
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fraction)
+                .fillMaxWidth()
+                .height(8.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(if (isNearLimit) AccentAmber else LightGreen)
-        )
+                .background(SurfaceVariant)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fraction)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isNearLimit) DangerTerracotta else LightGreen)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("$remaining remaining", fontSize = 11.sp, color = SecondaryText)
+            footer?.let {
+                Text(it, fontSize = 11.sp, color = SecondaryText)
+            }
+        }
     }
-    Spacer(modifier = Modifier.height(4.dp))
-    Text("$remaining remaining", fontSize = 12.sp, color = SecondaryText)
 }
 
 @Composable

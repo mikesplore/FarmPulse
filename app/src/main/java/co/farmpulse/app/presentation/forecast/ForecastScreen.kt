@@ -59,8 +59,8 @@ fun ForecastScreen(viewModel: ForecastViewModel) {
             ) {
                 // ── Hero Section (Integrated Image + Title + Location) ───────────
                 ForecastHero(
-                    location = state.locationLabel.ifBlank { "Locating..." },
-                    title = "7-day forecast"
+                    location = state.locationLabel.ifBlank { "Pinpointing your fields..." },
+                    title = "7-Day Agri Forecast"
                 )
 
                 Column(
@@ -124,7 +124,7 @@ fun ForecastScreen(viewModel: ForecastViewModel) {
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                LoadingOverlay("Synchronizing forecast...")
+                LoadingOverlay("Harvesting field data...")
             }
         }
     }
@@ -135,7 +135,7 @@ private fun ForecastHero(location: String, title: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(220.dp)
+            .height(260.dp)
     ) {
         // High-quality farm/landscape hero image
         AsyncImage(
@@ -145,13 +145,17 @@ private fun ForecastHero(location: String, title: String) {
             contentScale = ContentScale.Crop
         )
         
-        // Gradient overlay for contrast and depth
+        // Sophisticated gradient overlay for readability and depth
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.3f),
+                            Color.Black.copy(alpha = 0.85f)
+                        )
                     )
                 )
         )
@@ -159,32 +163,54 @@ private fun ForecastHero(location: String, title: String) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.Bottom
         ) {
+            // Overline tag
+            Surface(
+                color = ForestGreen.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Text(
+                    text = "FIELD INTELLIGENCE",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    letterSpacing = 1.2.sp
+                )
+            }
+
             Text(
                 text = title,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Black,
                 color = Color.White,
-                letterSpacing = (-0.5).sp
+                letterSpacing = (-1.5).sp,
+                lineHeight = 38.sp
             )
             
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Place,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = Color.White.copy(alpha = 0.9f)
+                    tint = LightGreen
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = location,
-                    fontSize = 16.sp,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontWeight = FontWeight.Medium
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
@@ -290,6 +316,20 @@ private fun DayRow(day: DailyForecastDto, isToday: Boolean) {
 }
 
 @Composable
+private fun ShimmerForecastRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ShimmerBox(modifier = Modifier.width(90.dp).height(20.dp))
+        Spacer(modifier = Modifier.weight(1f))
+        ShimmerBox(modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.weight(1.5f).padding(horizontal = 16.dp))
+        ShimmerBox(modifier = Modifier.width(64.dp).height(20.dp))
+    }
+}
+
+@Composable
 private fun RainProbabilityChart(daily: List<DailyForecastDto>, isLoading: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth().border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
@@ -308,71 +348,51 @@ private fun RainProbabilityChart(daily: List<DailyForecastDto>, isLoading: Boole
                     Text("50%", fontSize = 9.sp, color = SecondaryText)
                     Text("0%", fontSize = 9.sp, color = SecondaryText)
                 }
-                
+
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
+                // Bars
+                Row(
+                    modifier = Modifier.weight(1f).height(120.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
                     if (isLoading) {
-                        ShimmerBox(Modifier.fillMaxWidth().height(120.dp))
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(120.dp),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            daily.take(7).forEach { day ->
-                                val prob = (day.precipitationProbability ?: 0.0).coerceIn(0.0, 100.0)
-                                val barHeight = (120 * prob / 100).dp.coerceAtLeast(6.dp)
-                                val barColor = when {
-                                    prob >= 60.0 -> AccentAmber
-                                    prob < 40.0 -> LightGreen
-                                    else -> Color(0xFFB8DAC5)
-                                }
-                                Box(
-                                    modifier = Modifier.weight(1f).height(barHeight).background(barColor, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                )
-                            }
+                        repeat(7) {
+                            Box(modifier = Modifier.width(24.dp).fillMaxHeight(0.3f).background(SurfaceVariant, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)))
                         }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            daily.take(7).forEach { day ->
-                                val dayShortName = try { 
-                                    LocalDate.parse(day.date).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) 
-                                } catch (e: Exception) { "?" }
-                                Text(text = dayShortName, modifier = Modifier.weight(1f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SecondaryText, textAlign = TextAlign.Center)
-                            }
+                    } else {
+                        daily.forEach { day ->
+                            val prob = (day.precipitationProbability ?: 0.0).toFloat() / 100f
+                            Box(
+                                modifier = Modifier
+                                    .width(24.dp)
+                                    .fillMaxHeight(prob.coerceAtLeast(0.05f))
+                                    .background(
+                                        if (prob >= 0.6f) AccentAmber else LightGreen,
+                                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+                                    )
+                            )
                         }
                     }
                 }
             }
 
-            // Probability Legend
-            Spacer(modifier = Modifier.height(20.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                LegendItem(color = LightGreen, label = "Low risk")
-                LegendItem(color = Color(0xFFB8DAC5), label = "Moderate")
-                LegendItem(color = AccentAmber, label = "High risk")
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // X-axis labels (Days)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 36.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                daily.forEach { day ->
+                    val label = try {
+                        val date = LocalDate.parse(day.date)
+                        date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                    } catch (e: Exception) { "--" }
+                    Text(label, fontSize = 10.sp, color = SecondaryText, modifier = Modifier.width(24.dp), textAlign = TextAlign.Center)
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun LegendItem(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(text = label, fontSize = 11.sp, color = SecondaryText)
-    }
-}
-
-@Composable
-private fun ShimmerForecastRow() {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        ShimmerBox(Modifier.width(48.dp).height(20.dp))
-        Spacer(modifier = Modifier.width(24.dp))
-        ShimmerBox(Modifier.size(24.dp))
-        Spacer(modifier = Modifier.weight(1f))
-        ShimmerBox(Modifier.width(70.dp).height(20.dp))
     }
 }

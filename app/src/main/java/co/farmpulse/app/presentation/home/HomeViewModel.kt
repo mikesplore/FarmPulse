@@ -117,7 +117,7 @@ class HomeViewModel @Inject constructor(
                         isFromCache = value.cachedAt != null,
                         cachedAt = value.cachedAt
                     )
-                    Log.i("HomeViewModel", "Loaded weather for $city, ${uiState.value}")
+                    Log.i("HomeViewModel", "Loaded weather $city, Data: ${response.current}")
                 } else {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = "Empty response")
                 }

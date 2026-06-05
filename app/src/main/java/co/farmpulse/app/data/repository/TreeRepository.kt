@@ -5,6 +5,7 @@ import javax.inject.Inject
 import co.farmpulse.app.data.local.entities.CachedTreeAnalysisEntity
 import co.farmpulse.app.data.remote.api.TreeApiService
 import co.farmpulse.app.data.remote.dto.TreeAnalysisResponse
+import co.farmpulse.app.data.remote.dto.TreeQuotaResponse
 import co.farmpulse.app.domain.model.TreeAnalysisResult
 import co.farmpulse.app.util.NetworkMonitor
 import com.google.gson.Gson
@@ -84,6 +85,15 @@ class TreeRepository @Inject constructor(
             Result.failure(Exception(errorMessage))
         } catch (e: Exception) {
             Result.failure(Exception(e.message ?: "Analysis failed"))
+        }
+    }
+
+    suspend fun getQuota(): Result<TreeQuotaResponse> {
+        return try {
+            val response = api.getQuota()
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

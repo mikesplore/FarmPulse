@@ -3,6 +3,7 @@ package co.farmpulse.app.presentation.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.farmpulse.app.data.local.prefs.UserPreferencesRepository
+import co.farmpulse.app.data.repository.TreeRepository
 import co.farmpulse.app.data.repository.WeatherRepository
 import co.farmpulse.app.util.SnackbarManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,7 +16,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsUiState(
-    // Usage
+    // Weather API Usage
     val isLoadingUsage:      Boolean = true,
     val requestsUsed:        Int     = 0,
     val requestsLimit:       Int     = 1000,
@@ -26,6 +27,11 @@ data class SettingsUiState(
     val planName:            String  = "free",
     val maxDays:             Int     = 7,
     val periodEnd:           String? = null,
+
+    // Farm Scanner Usage
+    val treeQuotaUsed: Int = 0,
+    val treeQuotaLimit: Int = 0,
+    val treeQuotaResetsAt: String = "",
 
     // Preferences (persisted in DataStore)
     val aiEnabled:    Boolean = true,
@@ -43,6 +49,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: WeatherRepository,
+    private val treeRepository: TreeRepository,
     private val prefsRepository: UserPreferencesRepository,
     private val snackbarManager: SnackbarManager
 ) : ViewModel() {
@@ -78,20 +85,26 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingUsage = true) }
             
-            // 1. Fetch usage statistics from /v1/usage
+            // 1. Fetch weather usage statistics
             val res = repository.getUsageStats()
             
-            // 2. Also fetch weather info to get the latest ip_geo city for the "Auto-detected city" field
+            // 2. Fetch tree analysis quota
+            val treeRes = treeRepository.getQuota()
+            
+            // 3. Also fetch weather info to get detected city
             val weatherRes = repository.getFullWeather()
             val detectedCity = weatherRes.getOrNull()?.response?.ipGeo?.city
 
             _uiState.update { currentState ->
+                var nextState = currentState.copy(
+                    isLoadingUsage = false,
+                    ipCity = detectedCity ?: currentState.ipCity
+                )
+
                 if (res.isSuccess) {
                     val usage = res.getOrNull()
                     if (usage != null) {
-                        currentState.copy(
-                            isLoadingUsage = false,
-                            // Correctly map from nested DTO structure to UI state
+                        nextState = nextState.copy(
                             requestsUsed = usage.period?.requestCount ?: 0,
                             requestsLimit = usage.limits?.requests ?: 1000,
                             requestsRemaining = usage.remaining?.requests ?: 0,
@@ -100,21 +113,23 @@ class SettingsViewModel @Inject constructor(
                             aiRequestsRemaining = usage.remaining?.aiRequests ?: 0,
                             planName = usage.plan ?: "free",
                             maxDays = usage.limits?.maxDays ?: 7,
-                            periodEnd = usage.period?.end,
-                            ipCity = detectedCity ?: currentState.ipCity
+                            periodEnd = usage.period?.end
                         )
-                    } else {
-                        currentState.copy(isLoadingUsage = false, ipCity = detectedCity ?: currentState.ipCity)
                     }
-                } else {
-                    // Show error via global snackbar
-                    val errorMsg = res.exceptionOrNull()?.message ?: "Failed to load usage data"
-                    // Only show snackbar if we actually have an API key set, otherwise it's expected to fail
-                    if (_uiState.value.apiKey.isNotBlank()) {
-                        snackbarManager.showMessage(errorMsg)
-                    }
-                    currentState.copy(isLoadingUsage = false, ipCity = detectedCity ?: currentState.ipCity)
+                } else if (currentState.apiKey.isNotBlank()) {
+                    snackbarManager.showMessage(res.exceptionOrNull()?.message ?: "Failed to load weather usage")
                 }
+
+                if (treeRes.isSuccess) {
+                    val quota = treeRes.getOrNull()
+                    nextState = nextState.copy(
+                        treeQuotaUsed = quota?.used ?: 0,
+                        treeQuotaLimit = quota?.limit ?: 0,
+                        treeQuotaResetsAt = quota?.resetsAt ?: ""
+                    )
+                }
+
+                nextState
             }
         }
     }

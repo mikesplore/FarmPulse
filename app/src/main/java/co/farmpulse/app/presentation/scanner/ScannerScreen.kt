@@ -88,15 +88,6 @@ fun ScannerScreen(
                     color = OnSurfaceCharcoal
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // ── Quota card ────────────────────────────────────────────────────
-                QuotaCard(
-                    used = state.quotaUsed,
-                    limit = state.quotaLimit,
-                    resetsAt = state.quotaResetsAt
-                )
-
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // ── Upload zone ───────────────────────────────────────────────────
@@ -231,63 +222,6 @@ fun ScannerScreen(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun QuotaCard(used: Int, limit: Int, resetsAt: String) {
-    val progress = (used.toFloat() / limit.toFloat()).coerceIn(0f, 1f)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Monthly analyses",
-                    fontSize = 13.sp,
-                    color = SecondaryText,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "$used / $limit used",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ForestGreen
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .background(SurfaceVariant, RoundedCornerShape(4.dp))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progress)
-                        .background(LightGreen, RoundedCornerShape(4.dp))
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${limit - used} remaining · resets $resetsAt",
-                fontSize = 11.sp,
-                color = SecondaryText
-            )
         }
     }
 }

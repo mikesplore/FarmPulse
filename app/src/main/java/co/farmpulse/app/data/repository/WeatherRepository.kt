@@ -40,12 +40,32 @@ class WeatherRepository @Inject constructor(
         if (networkMonitor.isOnline()) {
             try {
                 Log.i("WeatherRepository", "Fetching weather from network (lat=$lat, lon=$lon, ai=$ai)")
-                val response = if (lat != null && lon != null) {
-                    api.getWeather(lat = lat, lon = lon, ai = ai, lang = lang, units = units)
+                
+                var response: WeatherGeoResponse
+                
+                if (lat != null && lon != null) {
+                    // 1a. Directly call /weather if we have coordinates
+                    response = api.getWeather(lat = lat, lon = lon, ai = ai, lang = lang, units = units)
                 } else {
-                    api.getWeatherByIp(ai = ai, lang = lang, units = units)
+                    // 1b. Call /weather-geo by IP first to get coordinates
+                    val geoRes = api.getWeatherByIp(ai = ai, lang = lang, units = units)
+                    val discoveredLat = geoRes.location?.lat ?: geoRes.ipGeo?.lat
+                    val discoveredLon = geoRes.location?.lon ?: geoRes.ipGeo?.lon
+                    
+                    if (discoveredLat != null && discoveredLon != null) {
+                        // 2. DOUBLE REQUEST: Use discovered coords to call /weather for richer details
+                        Log.i("WeatherRepository", "Location discovered via IP: $discoveredLat, $discoveredLon. Fetching full weather.")
+                        val fullRes = api.getWeather(lat = discoveredLat, lon = discoveredLon, ai = ai, lang = lang, units = units)
+                        // Merge discovery info (IP metadata) back into the full response
+                        response = fullRes.copy(ipGeo = geoRes.ipGeo)
+                    } else {
+                        response = geoRes
+                    }
                 }
                 
+                // 3. BACKFILL: Ensure missing 'current' fields are populated from the matching 'hourly' item
+                response = enrichCurrentWithHourlyData(response)
+
                 val finalLat = response.location?.lat ?: response.ipGeo?.lat ?: 0.0
                 val finalLon = response.location?.lon ?: response.ipGeo?.lon ?: 0.0
                 val city = reverseGeocode(finalLat, finalLon) ?: response.ipGeo?.city ?: "Unknown"
@@ -62,28 +82,57 @@ class WeatherRepository @Inject constructor(
         }
     }
 
+    /**
+     * Enriches the 'current' object using fields from the closest matching hourly forecast item.
+     */
+    private fun enrichCurrentWithHourlyData(response: WeatherGeoResponse): WeatherGeoResponse {
+        val current = response.current ?: return response
+        val hourly = response.hourly ?: return response
+        
+        // Find the hourly data matching the current time (by hour)
+        val currentTimeStr = current.time ?: "" // e.g. "2026-06-05T17:30"
+        val hourPrefix = if (currentTimeStr.length >= 13) currentTimeStr.take(13) else ""
+        
+        val matchedHour = if (hourPrefix.isNotBlank()) {
+            hourly.find { it.time?.startsWith(hourPrefix) == true } ?: hourly.firstOrNull()
+        } else {
+            hourly.firstOrNull()
+        } ?: return response
+
+        val enrichedCurrent = current.copy(
+            humidity = current.humidity ?: matchedHour.humidity,
+            feelsLike = current.feelsLike ?: matchedHour.feelsLike,
+            uvIndex = current.uvIndex ?: matchedHour.uvIndex,
+            windGust = current.windGust ?: matchedHour.windGust,
+            // Fallback for others if needed
+            temperature = current.temperature ?: matchedHour.temperature,
+            windSpeed = current.windSpeed ?: matchedHour.windSpeed,
+            conditionCode = current.conditionCode ?: matchedHour.conditionCode,
+            icon = current.icon ?: matchedHour.icon,
+            iconPath = current.iconPath ?: matchedHour.iconPath
+        )
+        
+        return response.copy(current = enrichedCurrent)
+    }
+
     private suspend fun saveToDatabase(response: WeatherGeoResponse, city: String, lat: Double, lon: Double) {
         val now = System.currentTimeMillis()
-        
-        // BACKFILL LOGIC: If 'current' data is incomplete, pull metrics from the first hour of forecast
-        val firstHour = response.hourly?.firstOrNull()
         
         val current = CurrentWeatherEntity(
             city = city,
             region = response.ipGeo?.region ?: response.location?.timezone ?: "",
             lat = lat,
             lon = lon,
-            temperature = response.current?.temperature ?: firstHour?.temperature,
-            windSpeed = response.current?.windSpeed ?: firstHour?.windSpeed,
+            temperature = response.current?.temperature,
+            windSpeed = response.current?.windSpeed,
             windDirection = response.current?.windDirection,
-            conditionCode = response.current?.conditionCode ?: firstHour?.conditionCode,
-            icon = response.current?.icon ?: firstHour?.icon,
-            iconPath = response.current?.iconPath ?: firstHour?.iconPath,
-            // Prioritize current humidity/feels/uv/gust, but fall back to hourly if null
-            humidity = response.current?.humidity ?: firstHour?.humidity,
-            feelsLike = response.current?.feelsLike ?: firstHour?.feelsLike,
-            uvIndex = response.current?.uvIndex ?: firstHour?.uvIndex,
-            windGust = response.current?.windGust ?: firstHour?.windGust,
+            conditionCode = response.current?.conditionCode,
+            icon = response.current?.icon,
+            iconPath = response.current?.iconPath,
+            humidity = response.current?.humidity,
+            feelsLike = response.current?.feelsLike,
+            uvIndex = response.current?.uvIndex,
+            windGust = response.current?.windGust,
             aiSummary = response.aiSummary?.summary,
             fetchedAt = now
         )
@@ -121,7 +170,7 @@ class WeatherRepository @Inject constructor(
         }
 
         dao.saveFullWeather(current, hourly, daily)
-        Log.i("WeatherRepository", "Saved structured weather for $city (humidity=${current.humidity}, uv=${current.uvIndex})")
+        Log.i("WeatherRepository", "Saved enriched weather for $city to cache")
     }
 
     private suspend fun loadFullFromCache(): Result<WeatherResponseWithMeta> {
