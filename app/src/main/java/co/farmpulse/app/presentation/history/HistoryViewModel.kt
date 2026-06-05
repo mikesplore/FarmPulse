@@ -34,6 +34,8 @@ class HistoryViewModel @Inject constructor(
     init {
         observeHistory()
         observePreferences()
+        // Initial sync on startup
+        refreshHistory(isInitialLoad = true)
     }
 
     private fun observeHistory() {
@@ -56,12 +58,23 @@ class HistoryViewModel @Inject constructor(
         _uiState.update { it.copy(selectedItem = item) }
     }
 
-    fun refreshHistory() {
+    fun refreshHistory(isInitialLoad: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true) }
-            // Simulate network sync/refresh
-            kotlinx.coroutines.delay(1000)
-            _uiState.update { it.copy(isRefreshing = false) }
+            if (isInitialLoad) {
+                _uiState.update { it.copy(isLoading = it.items.isEmpty()) }
+            } else {
+                _uiState.update { it.copy(isRefreshing = true) }
+            }
+
+            // Call the actual sync method from repository
+            repository.syncHistory()
+
+            _uiState.update { 
+                it.copy(
+                    isLoading = false,
+                    isRefreshing = false
+                ) 
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package co.farmpulse.app.data.repository
 
+import android.util.Log
 import co.farmpulse.app.data.local.db.TreeAnalysisDao
 import javax.inject.Inject
 import co.farmpulse.app.data.local.entities.CachedTreeAnalysisEntity
@@ -17,6 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import retrofit2.HttpException
+import java.time.OffsetDateTime
 
 /**
  * Repository for tree analysis operations. Saves results to Room for history.
@@ -74,7 +76,6 @@ class TreeRepository @Inject constructor(
 
             Result.success(domain)
         } catch (e: HttpException) {
-            // Parse error message from server response
             val errorBody = e.response()?.errorBody()?.string()
             val errorMessage = try {
                 val json = gson.fromJson(errorBody, JsonObject::class.java)
@@ -85,6 +86,43 @@ class TreeRepository @Inject constructor(
             Result.failure(Exception(errorMessage))
         } catch (e: Exception) {
             Result.failure(Exception(e.message ?: "Analysis failed"))
+        }
+    }
+
+    suspend fun syncHistory(): Result<Unit> {
+        if (!networkMonitor.isOnline()) return Result.failure(Exception("Offline"))
+        
+        return try {
+            val response = api.getHistory()
+            response.analyses?.forEach { dto ->
+                // Map API DTO back to the JSON format used in cache for compatibility
+                val analysisResponse = TreeAnalysisResponse(
+                    analysisId = dto.analysisId,
+                    totalTreeCount = dto.totalTreeCount,
+                    confidenceScore = dto.confidenceScore,
+                    county = dto.county,
+                    overlayImageUrl = dto.overlayImageUrl,
+                    treeDensityPerAcre = dto.treeDensityPerAcre,
+                    canopyCoveragePct = dto.canopyCoveragePct
+                )
+                
+                val timestamp = try {
+                    OffsetDateTime.parse(dto.timestamp).toInstant().toEpochMilli()
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
+
+                val entity = CachedTreeAnalysisEntity(
+                    analysisId = dto.analysisId ?: java.util.UUID.randomUUID().toString(),
+                    json = gson.toJson(analysisResponse),
+                    createdAt = timestamp
+                )
+                dao.saveAnalysis(entity)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("TreeRepository", "Sync failed", e)
+            Result.failure(e)
         }
     }
 
