@@ -328,7 +328,8 @@ private fun DetailsGrid(state: HomeUiState) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             DetailCard(Modifier.weight(1f), "Wind gust", "${current?.windGust?.toInt() ?: "--"} km/h", Icons.Outlined.Air)
-            DetailCard(Modifier.weight(1f), "Precip. sum", "${daily?.precipitationSum?.let { "%.1f mm".format(it) } ?: "--"}", Icons.Outlined.WaterDrop)
+            DetailCard(Modifier.weight(1f), "Precip. sum",
+                daily?.precipitationSum?.let { "%.1f mm".format(it) } ?: "--", Icons.Outlined.WaterDrop)
         }
     }
 }
