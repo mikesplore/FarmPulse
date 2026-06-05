@@ -22,7 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -95,7 +97,8 @@ fun HomeScreen(viewModel: HomeViewModel) {
                         city = state.city,
                         region = state.region,
                         temp = state.current?.temperature,
-                        condition = getConditionText(state.current?.conditionCode)
+                        condition = getConditionText(state.current?.conditionCode),
+                        iconUrl = state.current?.icon
                     )
 
                     Column(
@@ -182,13 +185,27 @@ private fun HourlyCell(hour: HourlyForecastDto, isNow: Boolean) {
     }
     val bgColor = if (isNow) ForestGreen else SurfaceVariant
     val contentColor = if (isNow) Color.White else OnSurfaceCharcoal
+    
     Column(
-        modifier = Modifier.width(72.dp).background(bgColor, RoundedCornerShape(14.dp)).padding(vertical = 18.dp),
+        modifier = Modifier
+            .width(72.dp)
+            .background(bgColor, RoundedCornerShape(14.dp))
+            .padding(vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = timeLabel, fontSize = 11.sp, color = if (isNow) Color(0xFFD4F2E1) else SecondaryText)
         Spacer(modifier = Modifier.height(10.dp))
-        Icon(getIconForCondition(hour.conditionCode), null, modifier = Modifier.size(24.dp), tint = if (isNow) Color.White else ForestGreen)
+        
+        // Use backend SVG icon for accurate day/night representation
+        AsyncImage(
+            model = hour.icon,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            // Use rememberVectorPainter to correctly handle ImageVector as an error fallback
+            error = rememberVectorPainter(getIconForCondition(hour.conditionCode)),
+            colorFilter = if (isNow) ColorFilter.tint(Color.White) else ColorFilter.tint(ForestGreen)
+        )
+        
         Spacer(modifier = Modifier.height(10.dp))
         Text(text = "${hour.temperature?.toInt() ?: "--"}°", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = contentColor)
     }
@@ -229,7 +246,7 @@ private fun LocationPermissionBanner(onRequestPermission: () -> Unit) {
 }
 
 @Composable
-private fun HomeHero(city: String, region: String, temp: Double?, condition: String?) {
+private fun HomeHero(city: String, region: String, temp: Double?, condition: String?, iconUrl: String?) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -270,13 +287,27 @@ private fun HomeHero(city: String, region: String, temp: Double?, condition: Str
                 )
             }
 
-            Text(
-                text = "${temp?.toInt() ?: "--"}°",
-                fontSize = 110.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                lineHeight = 110.sp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "${temp?.toInt() ?: "--"}°",
+                    fontSize = 110.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    lineHeight = 110.sp
+                )
+                
+                if (!iconUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = iconUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.9f))
+                    )
+                }
+            }
 
             Text(
                 text = condition ?: "Analyzing sky...",

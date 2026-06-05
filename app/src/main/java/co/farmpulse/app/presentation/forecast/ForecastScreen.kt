@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -312,17 +313,18 @@ private fun DayRow(day: DailyForecastDto, isToday: Boolean) {
     ) {
         Text(
             text = dayName,
-            modifier = Modifier.width(90.dp), // Accommodates full names like Wednesday
+            modifier = Modifier.width(90.dp),
             fontSize = 16.sp,
             fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
             color = if (isToday) ForestGreen else OnSurfaceCharcoal
         )
 
-        Icon(
-            imageVector = getIconForCondition(day.conditionCode),
+        // Fixed: Use rememberVectorPainter for ImageVector fallback to avoid IllegalArgumentException
+        AsyncImage(
+            model = day.icon,
             contentDescription = null,
-            modifier = Modifier.weight(1f).size(22.dp),
-            tint = if (isRainy) AccentAmber else SecondaryText
+            modifier = Modifier.weight(1f).size(26.dp),
+            error = rememberVectorPainter(getIconForCondition(day.conditionCode))
         )
 
         Box(
