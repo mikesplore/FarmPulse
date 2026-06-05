@@ -1,6 +1,8 @@
 package co.farmpulse.app.presentation.scanner
 
+import android.Manifest
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -31,8 +33,11 @@ import co.farmpulse.app.domain.model.TreeAnalysisResult
 import co.farmpulse.app.presentation.components.*
 import co.farmpulse.app.ui.theme.*
 import coil.compose.AsyncImage
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ScannerScreen(
     viewModel: ScannerViewModel,
@@ -42,6 +47,18 @@ fun ScannerScreen(
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState()
     var showBottomSheet by remember { mutableStateOf(false) }
+
+    // Permission state for camera
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    
+    // Media permission state (needed for some older devices or specific storage access, 
+    // though GetContent usually bypasses it, we'll request if needed by custom logic)
+    val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    val mediaPermissionState = rememberPermissionState(mediaPermission)
 
     // Navigate when a result arrives and immediately clear it in the callback
     LaunchedEffect(state.result) {
@@ -91,7 +108,6 @@ fun ScannerScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // ── Upload zone ───────────────────────────────────────────────────
-                // Now clickable to trigger the bottom sheet
                 UploadZone(
                     imageUri = state.selectedImageUri,
                     onClick = { showBottomSheet = true }
@@ -203,9 +219,13 @@ fun ScannerScreen(
                         Icon(Icons.Outlined.PhotoCamera, null, tint = ForestGreen) 
                     },
                     modifier = Modifier.clickable {
-                        showBottomSheet = false
-                        val uri = viewModel.prepareCameraUri(context)
-                        cameraLauncher.launch(uri)
+                        if (cameraPermissionState.status.isGranted) {
+                            showBottomSheet = false
+                            val uri = viewModel.prepareCameraUri(context)
+                            cameraLauncher.launch(uri)
+                        } else {
+                            cameraPermissionState.launchPermissionRequest()
+                        }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                 )
@@ -216,6 +236,8 @@ fun ScannerScreen(
                         Icon(Icons.Outlined.PhotoLibrary, null, tint = ForestGreen) 
                     },
                     modifier = Modifier.clickable {
+                        // GetContent typically doesn't need permissions, but we check if we want to be safe 
+                        // or if we needed to access files directly later.
                         showBottomSheet = false
                         galleryLauncher.launch("image/*")
                     },

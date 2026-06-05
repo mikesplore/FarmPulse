@@ -7,6 +7,7 @@ import co.farmpulse.app.data.remote.dto.CurrentWeatherDto
 import co.farmpulse.app.data.remote.dto.HourlyForecastDto
 import co.farmpulse.app.data.remote.dto.DailyForecastDto
 import co.farmpulse.app.data.repository.WeatherRepository
+import co.farmpulse.app.util.LocationService
 import co.farmpulse.app.util.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import android.util.Log
@@ -20,6 +21,7 @@ import java.time.LocalDateTime
 
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val city: String = "",
     val region: String = "",
     val lat: Double = 0.0,
@@ -33,17 +35,19 @@ data class HomeUiState(
     val aiSummary: String? = null,
     val isLoadingAiSummary: Boolean = false,
     val aiEnabled: Boolean = true,
-    val isOffline: Boolean = false
+    val isOffline: Boolean = false,
+    val isApiKeyMissing: Boolean = false
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: WeatherRepository,
     private val prefsRepository: UserPreferencesRepository,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val locationService: LocationService
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState
 
     init {
@@ -62,22 +66,45 @@ class HomeViewModel @Inject constructor(
     private fun observePreferences() {
         viewModelScope.launch {
             prefsRepository.userPreferencesFlow.collectLatest { prefs ->
-                _uiState.value = _uiState.value.copy(aiEnabled = prefs.aiEnabled)
-                loadWeather()
+                _uiState.value = _uiState.value.copy(
+                    aiEnabled = prefs.aiEnabled,
+                    isApiKeyMissing = prefs.apiKey.isBlank()
+                )
             }
         }
     }
 
-    fun loadWeather() {
+    fun loadWeather(usePreciseLocation: Boolean = false, isPullToRefresh: Boolean = false) {
         viewModelScope.launch {
             val prefs = prefsRepository.userPreferencesFlow.first()
+            
+            // Only show full loading if we have no data and it's not a pull-to-refresh
+            val showFullLoading = !isPullToRefresh && _uiState.value.current == null
+            
             _uiState.value = _uiState.value.copy(
-                isLoading = true, 
+                isLoading = showFullLoading,
+                isRefreshing = isPullToRefresh,
                 error = null,
-                isLoadingAiSummary = prefs.aiEnabled
+                isApiKeyMissing = prefs.apiKey.isBlank()
             )
+
+            // Location Logic: Try overrides -> then last known -> then GPS if requested
+            var lat: Double? = prefs.latOverride.toDoubleOrNull() ?: prefs.lastLat
+            var lon: Double? = prefs.lonOverride.toDoubleOrNull() ?: prefs.lastLon
+
+            if (usePreciseLocation && prefs.latOverride.isBlank() && prefs.lonOverride.isBlank()) {
+                val location = locationService.getCurrentLocation()
+                if (location != null) {
+                    lat = location.latitude
+                    lon = location.longitude
+                    Log.i("HomeViewModel", "Found location: $lat, $lon. Persisting.")
+                    prefsRepository.updateLastKnownLocation(lat, lon)
+                }
+            }
             
             val res = repository.getFullWeather(
+                lat = lat,
+                lon = lon,
                 ai = prefs.aiEnabled,
                 lang = prefs.lang,
                 units = prefs.units
@@ -102,9 +129,19 @@ class HomeViewModel @Inject constructor(
                             false 
                         }
                     }
+
+                    // PERSISTENCE FIX: Store coordinates discovered (via IP or otherwise) if no manual override
+                    if (prefs.latOverride.isBlank() && prefs.lonOverride.isBlank()) {
+                        val discLat = response.location?.lat ?: response.ipGeo?.lat
+                        val discLon = response.location?.lon ?: response.ipGeo?.lon
+                        if (discLat != null && discLon != null) {
+                            prefsRepository.updateLastKnownLocation(discLat, discLon)
+                        }
+                    }
                     
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         city = city,
                         region = region,
                         lat = response.location?.lat ?: response.ipGeo?.lat ?: 0.0,
@@ -117,15 +154,14 @@ class HomeViewModel @Inject constructor(
                         isFromCache = value.cachedAt != null,
                         cachedAt = value.cachedAt
                     )
-                    Log.i("HomeViewModel", "Loaded weather $city, Data: ${response.current}")
                 } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = "Empty response")
+                    _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false, error = "Empty response")
                 }
             } else {
                 val ex = res.exceptionOrNull()
-                Log.w("HomeViewModel", "Failed to load weather: ${ex?.message}")
                 _uiState.value = _uiState.value.copy(
                     isLoading = false, 
+                    isRefreshing = false,
                     isLoadingAiSummary = false,
                     error = ex?.message ?: "Error"
                 )
@@ -134,6 +170,6 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refreshWithAi() {
-        loadWeather()
+        loadWeather(isPullToRefresh = true)
     }
 }

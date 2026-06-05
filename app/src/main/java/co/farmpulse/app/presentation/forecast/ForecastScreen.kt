@@ -1,5 +1,6 @@
 package co.farmpulse.app.presentation.forecast
 
+import android.Manifest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,11 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Thunderstorm
 import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -33,98 +33,181 @@ import co.farmpulse.app.data.remote.dto.DailyForecastDto
 import co.farmpulse.app.presentation.components.*
 import co.farmpulse.app.ui.theme.*
 import coil.compose.AsyncImage
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import java.time.LocalDate
 import java.time.format.TextStyle
-import java.util.*
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ForecastScreen(viewModel: ForecastViewModel) {
     val state by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    PullToRefreshBox(
-        isRefreshing = state.isLoading,
-        onRefresh = { viewModel.loadForecast() },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundOffWhite)
+    // Permission state for location
+    val locationPermissionsState = rememberMultiplePermissionsState(
+        listOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+    )
+
+    // Show snackbar if API Key is missing
+    LaunchedEffect(state.isApiKeyMissing) {
+        if (state.isApiKeyMissing) {
+            snackbarHostState.showSnackbar(
+                message = "Please add your API key in the settings page",
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
+    // Trigger update only if we don't have data
+    LaunchedEffect(locationPermissionsState.allPermissionsGranted) {
+        if (state.daily.isEmpty()) {
+            viewModel.loadForecast(usePreciseLocation = locationPermissionsState.allPermissionsGranted)
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { 
+                viewModel.loadForecast(
+                    usePreciseLocation = locationPermissionsState.allPermissionsGranted,
+                    isPullToRefresh = true
+                ) 
+            },
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .background(BackgroundOffWhite)
             ) {
-                // ── Hero Section (Integrated Image + Title + Location) ───────────
-                ForecastHero(
-                    location = state.locationLabel.ifBlank { "Pinpointing your fields..." },
-                    title = "7-Day Agri Forecast"
-                )
-
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    // ── Hero Section (Integrated Image + Title + Location) ───────────
+                    ForecastHero(
+                        location = state.locationLabel.ifBlank { "Pinpointing your fields..." },
+                        title = "7-Day Farm Outlook"
+                    )
 
-                    // ── Weekly Highlights ─────────────────────────────────────────
-                    if (state.daily.isNotEmpty()) {
-                        ForecastSummaryCard(state.daily)
-                        Spacer(modifier = Modifier.height(32.dp))
-                    }
-
-                    // ── AI Insight section (Forecast) ─────────────────────────────
-                    if (state.aiEnabled) {
-                        AiInsightSection(
-                            summary = state.aiSummary,
-                            isLoading = state.isLoading && state.aiSummary == null,
-                            onGetInsight = { viewModel.loadForecast() }
-                        )
-                        Spacer(modifier = Modifier.height(32.dp))
-                    }
-
-                    // ── Main Forecast Card ────────────────────────────────────────
-                    Card(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-                        shape = RoundedCornerShape(16.dp)
+                            .padding(horizontal = 20.dp)
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            if (state.isLoading && state.daily.isEmpty()) {
-                                repeat(7) { ShimmerForecastRow() }
-                            } else {
-                                state.daily.forEachIndexed { index, day ->
-                                    DayRow(day = day, isToday = index == 0)
-                                    if (index < state.daily.size - 1) {
-                                        HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                        // Location Permission Banner
+                        if (!locationPermissionsState.allPermissionsGranted) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            LocationPermissionBanner {
+                                locationPermissionsState.launchMultiplePermissionRequest()
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // ── Weekly Highlights ─────────────────────────────────────────
+                        if (state.daily.isNotEmpty()) {
+                            ForecastSummaryCard(state.daily)
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+
+                        // ── AI Insight section (Forecast) ─────────────────────────────
+                        if (state.aiEnabled) {
+                            AiInsightSection(
+                                summary = state.aiSummary,
+                                isLoading = state.isRefreshing && state.aiSummary == null,
+                                onGetInsight = { 
+                                    viewModel.loadForecast(
+                                        usePreciseLocation = locationPermissionsState.allPermissionsGranted,
+                                        isPullToRefresh = true
+                                    ) 
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+
+                        // ── Main Forecast Card ────────────────────────────────────────
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
+                            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                if (state.isLoading && state.daily.isEmpty()) {
+                                    repeat(7) { ShimmerForecastRow() }
+                                } else {
+                                    state.daily.forEachIndexed { index, day ->
+                                        DayRow(day = day, isToday = index == 0)
+                                        if (index < state.daily.size - 1) {
+                                            HorizontalDivider(thickness = 0.5.dp, color = BorderGrey)
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(40.dp))
+
+                        // ── Rain Probability Section ──────────────────────────────────
+                        SectionHeading("Rain probability")
+                        RainProbabilityChart(daily = state.daily, isLoading = state.isLoading && state.daily.isEmpty())
+
+                        Spacer(modifier = Modifier.height(80.dp))
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(40.dp))
-
-                    // ── Rain Probability Section ──────────────────────────────────
-                    SectionHeading("Rain probability")
-                    RainProbabilityChart(daily = state.daily, isLoading = state.isLoading && state.daily.isEmpty())
-
-                    Spacer(modifier = Modifier.height(80.dp))
+                // Initial Loading Overlay (only for first load)
+                AnimatedVisibility(
+                    visible = state.isLoading && state.daily.isEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    LoadingOverlay("Harvesting field data...")
                 }
             }
+        }
+    }
+}
 
-            // Initial Loading Overlay (only for first load)
-            AnimatedVisibility(
-                visible = state.isLoading && state.daily.isEmpty(),
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                LoadingOverlay("Harvesting field data...")
+@Composable
+private fun LocationPermissionBanner(onRequestPermission: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = LightGreen.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.MyLocation, null, tint = ForestGreen, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Enable Precise Location",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurfaceCharcoal
+                )
+                Text(
+                    "Get hyper-local forecasts for your exact farm site.",
+                    fontSize = 12.sp,
+                    color = SecondaryText
+                )
+            }
+            TextButton(onClick = onRequestPermission) {
+                Text("Enable", color = ForestGreen, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -137,7 +220,6 @@ private fun ForecastHero(location: String, title: String) {
             .fillMaxWidth()
             .height(260.dp)
     ) {
-        // High-quality farm/landscape hero image
         AsyncImage(
             model = "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000&auto=format&fit=crop",
             contentDescription = null,
@@ -145,7 +227,6 @@ private fun ForecastHero(location: String, title: String) {
             contentScale = ContentScale.Crop
         )
         
-        // Sophisticated gradient overlay for readability and depth
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -166,7 +247,6 @@ private fun ForecastHero(location: String, title: String) {
                 .padding(horizontal = 24.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.Bottom
         ) {
-            // Overline tag
             Surface(
                 color = ForestGreen.copy(alpha = 0.9f),
                 shape = RoundedCornerShape(4.dp),
@@ -213,60 +293,6 @@ private fun ForecastHero(location: String, title: String) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ForecastSummaryCard(daily: List<DailyForecastDto>) {
-    val rainiestDay = daily.maxByOrNull { it.precipitationProbability ?: 0.0 }
-    val warmestDay = daily.maxByOrNull { it.tempMax ?: 0.0 }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SummaryHighlight(
-            modifier = Modifier.weight(1f),
-            label = "Rainiest",
-            value = "${rainiestDay?.precipitationProbability?.toInt()}%",
-            dateStr = rainiestDay?.date,
-            icon = Icons.Outlined.Thunderstorm,
-            color = AccentAmber
-        )
-        SummaryHighlight(
-            modifier = Modifier.weight(1f),
-            label = "Warmest",
-            value = "${warmestDay?.tempMax?.toInt()}°",
-            dateStr = warmestDay?.date,
-            icon = Icons.Outlined.WbSunny,
-            color = ForestGreen
-        )
-    }
-}
-
-@Composable
-private fun SummaryHighlight(modifier: Modifier, label: String, value: String, dateStr: String?, icon: ImageVector, color: Color) {
-    // Show full day name (e.g., "Monday")
-    val dayName = try {
-        val date = LocalDate.parse(dateStr)
-        date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
-    } catch (e: Exception) { "Unknown" }
-
-    Card(
-        modifier = modifier.border(0.5.dp, BorderGrey, RoundedCornerShape(14.dp)),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, modifier = Modifier.size(14.dp), tint = color)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SecondaryText)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(value, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = OnSurfaceCharcoal)
-            Text(dayName, fontSize = 12.sp, color = SecondaryText)
         }
     }
 }
@@ -392,6 +418,61 @@ private fun RainProbabilityChart(daily: List<DailyForecastDto>, isLoading: Boole
                     } catch (e: Exception) { "--" }
                     Text(label, fontSize = 10.sp, color = SecondaryText, modifier = Modifier.width(24.dp), textAlign = TextAlign.Center)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForecastSummaryCard(daily: List<DailyForecastDto>) {
+    val rainiestDay = daily.maxByOrNull { it.precipitationProbability ?: 0.0 }
+    val warmestDay = daily.maxByOrNull { it.tempMax ?: 0.0 }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SummaryHighlight(
+            modifier = Modifier.weight(1f),
+            label = "Rainiest",
+            value = "${rainiestDay?.precipitationProbability?.toInt() ?: 0}%",
+            dateStr = rainiestDay?.date,
+            icon = Icons.Outlined.Thunderstorm,
+            color = AccentAmber
+        )
+        SummaryHighlight(
+            modifier = Modifier.weight(1f),
+            label = "Warmest",
+            value = "${warmestDay?.tempMax?.toInt() ?: 0}°",
+            dateStr = warmestDay?.date,
+            icon = Icons.Outlined.WbSunny,
+            color = ForestGreen
+        )
+    }
+}
+
+@Composable
+private fun SummaryHighlight(modifier: Modifier, label: String, value: String, dateStr: String?, icon: ImageVector, color: Color) {
+    Card(
+        modifier = modifier.border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(color.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(label, fontSize = 11.sp, color = SecondaryText, fontWeight = FontWeight.Bold)
+                Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = OnSurfaceCharcoal)
             }
         }
     }

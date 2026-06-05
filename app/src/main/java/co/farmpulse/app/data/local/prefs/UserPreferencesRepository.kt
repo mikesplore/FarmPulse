@@ -23,6 +23,8 @@ data class UserPreferences(
     val cityOverride: String,
     val latOverride: String,
     val lonOverride: String,
+    val lastLat: Double?,
+    val lastLon: Double?,
     val apiKey: String
 )
 
@@ -37,6 +39,8 @@ class UserPreferencesRepository @Inject constructor(
         val CITY_OVERRIDE = stringPreferencesKey("city_override")
         val LAT_OVERRIDE = stringPreferencesKey("lat_override")
         val LON_OVERRIDE = stringPreferencesKey("lon_override")
+        val LAST_LAT = doublePreferencesKey("last_lat")
+        val LAST_LON = doublePreferencesKey("last_lon")
         val API_KEY = stringPreferencesKey("api_key")
     }
 
@@ -56,6 +60,8 @@ class UserPreferencesRepository @Inject constructor(
                 cityOverride = preferences[PreferencesKeys.CITY_OVERRIDE] ?: "",
                 latOverride = preferences[PreferencesKeys.LAT_OVERRIDE] ?: "",
                 lonOverride = preferences[PreferencesKeys.LON_OVERRIDE] ?: "",
+                lastLat = preferences[PreferencesKeys.LAST_LAT],
+                lastLon = preferences[PreferencesKeys.LAST_LON],
                 apiKey = preferences[PreferencesKeys.API_KEY] ?: ""
             )
         }
@@ -87,6 +93,13 @@ class UserPreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.CITY_OVERRIDE] = city
             preferences[PreferencesKeys.LAT_OVERRIDE] = lat
             preferences[PreferencesKeys.LON_OVERRIDE] = lon
+        }
+    }
+
+    suspend fun updateLastKnownLocation(lat: Double, lon: Double) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LAST_LAT] = lat
+            preferences[PreferencesKeys.LAST_LON] = lon
         }
     }
 

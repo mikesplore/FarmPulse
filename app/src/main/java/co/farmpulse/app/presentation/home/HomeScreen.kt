@@ -1,17 +1,16 @@
 package co.farmpulse.app.presentation.home
 
-import android.util.Log
+import android.Manifest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,104 +20,209 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.data.remote.dto.HourlyForecastDto
 import co.farmpulse.app.presentation.components.*
 import co.farmpulse.app.ui.theme.*
 import coil.compose.AsyncImage
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel) {
     val state by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Permission state for location
+    val locationPermissionsState = rememberMultiplePermissionsState(
+        listOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+    )
 
-    PullToRefreshBox(
-        isRefreshing = state.isLoading,
-        onRefresh = {
-            viewModel.loadWeather()
-            Log.i("HomeScreen", "fetched Data ${state.current}")
-                    },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(BackgroundOffWhite)
+    // Show snackbar if API Key is missing
+    LaunchedEffect(state.isApiKeyMissing) {
+        if (state.isApiKeyMissing) {
+            snackbarHostState.showSnackbar(
+                message = "Please add your API key in the settings page",
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
+    // Initial load logic - only if we don't have data yet
+    LaunchedEffect(locationPermissionsState.allPermissionsGranted) {
+        if (state.current == null) {
+            viewModel.loadWeather(usePreciseLocation = locationPermissionsState.allPermissionsGranted)
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = {
+                viewModel.loadWeather(
+                    usePreciseLocation = locationPermissionsState.allPermissionsGranted,
+                    isPullToRefresh = true
+                )
+            },
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .background(BackgroundOffWhite)
             ) {
-                // ── Hero Section with Image ───────────────────────────────────────
-                HomeHero(
-                    city = state.city,
-                    region = state.region,
-                    temp = state.current?.temperature,
-                    condition = getConditionText(state.current?.conditionCode)
-                )
-
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    // Offline banner - reactive to real-time network state
-                    OfflineBanner(isOffline = state.isOffline, cachedAt = state.cachedAt)
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // ── StatRow (Primary Metrics) ─────────────────────────────────
-                    StatRow(
-                        humidity = state.current?.humidity?.toInt(),
-                        windSpeed = state.current?.windSpeed,
-                        feelsLike = state.current?.feelsLike
+                    // ── Hero Section with Image ───────────────────────────────────────
+                    HomeHero(
+                        city = state.city,
+                        region = state.region,
+                        temp = state.current?.temperature,
+                        condition = getConditionText(state.current?.conditionCode)
                     )
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                    ) {
+                        // Offline banner - reactive to real-time network state
+                        OfflineBanner(isOffline = state.isOffline, cachedAt = state.cachedAt)
 
-                    // ── AI Insight section ────────────────────────────────────────
-                    // Only show if aiEnabled is true in settings
-                    if (state.aiEnabled) {
-                        AiInsightSection(
-                            summary = state.aiSummary,
-                            isLoading = state.isLoadingAiSummary,
-                            onGetInsight = { viewModel.refreshWithAi() }
+                        // Permission Request Banner if not granted
+                        if (!locationPermissionsState.allPermissionsGranted) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            LocationPermissionBanner {
+                                locationPermissionsState.launchMultiplePermissionRequest()
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // ── StatRow (Primary Metrics) ─────────────────────────────────
+                        StatRow(
+                            humidity = state.current?.humidity?.toInt(),
+                            windSpeed = state.current?.windSpeed,
+                            feelsLike = state.current?.feelsLike
                         )
-                        Spacer(modifier = Modifier.height(15.dp))
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // ── AI Insight section ────────────────────────────────────────
+                        if (state.aiEnabled) {
+                            AiInsightSection(
+                                summary = state.aiSummary,
+                                isLoading = state.isLoadingAiSummary,
+                                onGetInsight = { viewModel.refreshWithAi() }
+                            )
+                            Spacer(modifier = Modifier.height(15.dp))
+                        }
+
+                        // ── Next 6 Hours ──────────────────────────────────────────────
+                        SectionHeading(text = "Next 6 hours")
+                        HourlyStrip(hours = state.hourly.take(6))
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // ── Today's Details Grid ──────────────────────────────────────
+                        SectionHeading(text = "Today's details")
+                        DetailsGrid(state)
+
+                        Spacer(modifier = Modifier.height(80.dp))
                     }
+                }
 
-                    // ── Next 6 Hours ──────────────────────────────────────────────
-                    SectionHeading(text = "Next 6 hours")
-                    HourlyStrip(hours = state.hourly.take(6))
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // ── Today's Details Grid ──────────────────────────────────────
-                    SectionHeading(text = "Today's details")
-                    DetailsGrid(state)
-
-                    Spacer(modifier = Modifier.height(80.dp))
+                // Global Loading Overlay (only for first load)
+                AnimatedVisibility(
+                    visible = state.isLoading && state.current == null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    LoadingOverlay("Synchronizing farm data...")
                 }
             }
+        }
+    }
+}
 
-            // Global Loading Overlay (only for first load)
-            AnimatedVisibility(
-                visible = state.isLoading && state.current == null,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                LoadingOverlay("Synchronizing farm data...")
+
+@Composable
+private fun HourlyStrip(hours: List<HourlyForecastDto>) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 4.dp)
+    ) {
+        itemsIndexed(hours) { index, hour ->
+            HourlyCell(hour = hour, isNow = index == 0)
+        }
+    }
+}
+
+@Composable
+private fun HourlyCell(hour: HourlyForecastDto, isNow: Boolean) {
+    val timeLabel = if (isNow) "Now" else {
+        try { LocalDateTime.parse(hour.time).format(DateTimeFormatter.ofPattern("ha")) } catch (e: Exception) { "--" }
+    }
+    val bgColor = if (isNow) ForestGreen else SurfaceVariant
+    val contentColor = if (isNow) Color.White else OnSurfaceCharcoal
+    Column(
+        modifier = Modifier.width(72.dp).background(bgColor, RoundedCornerShape(14.dp)).padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = timeLabel, fontSize = 11.sp, color = if (isNow) Color(0xFFD4F2E1) else SecondaryText)
+        Spacer(modifier = Modifier.height(10.dp))
+        Icon(getIconForCondition(hour.conditionCode), null, modifier = Modifier.size(24.dp), tint = if (isNow) Color.White else ForestGreen)
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(text = "${hour.temperature?.toInt() ?: "--"}°", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = contentColor)
+    }
+}
+
+@Composable
+private fun LocationPermissionBanner(onRequestPermission: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = LightGreen.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(0.5.dp, LightGreen.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.MyLocation, null, tint = ForestGreen, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Precise Location",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurfaceCharcoal
+                )
+                Text(
+                    "Enable location for hyper-local farm weather.",
+                    fontSize = 12.sp,
+                    color = SecondaryText
+                )
+            }
+            TextButton(onClick = onRequestPermission) {
+                Text("Enable", color = ForestGreen, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -129,10 +233,10 @@ private fun HomeHero(city: String, region: String, temp: Double?, condition: Str
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp) // Taller hero for home
+            .height(200.dp)
     ) {
         AsyncImage(
-            model = "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+            model = "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=1470&auto=format&fit=crop",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -233,47 +337,13 @@ private fun DetailsGrid(state: HomeUiState) {
 private fun DetailCard(modifier: Modifier, label: String, value: String, icon: ImageVector) {
     Card(
         modifier = modifier.border(0.5.dp, BorderGrey, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite)
     ) {
-        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, modifier = Modifier.size(24.dp), tint = SecondaryText)
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = label, fontSize = 12.sp, color = SecondaryText, fontWeight = FontWeight.Medium)
-                Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = OnSurfaceCharcoal)
-            }
+        Column(modifier = Modifier.padding(16.dp)) {
+            Icon(icon, null, tint = ForestGreen, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(label, fontSize = 12.sp, color = SecondaryText)
+            Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = OnSurfaceCharcoal)
         }
-    }
-}
-
-@Composable
-private fun HourlyStrip(hours: List<HourlyForecastDto>) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
-    ) {
-        itemsIndexed(hours) { index, hour ->
-            HourlyCell(hour = hour, isNow = index == 0)
-        }
-    }
-}
-
-@Composable
-private fun HourlyCell(hour: HourlyForecastDto, isNow: Boolean) {
-    val timeLabel = if (isNow) "Now" else {
-        try { LocalDateTime.parse(hour.time).format(DateTimeFormatter.ofPattern("ha")) } catch (e: Exception) { "--" }
-    }
-    val bgColor = if (isNow) ForestGreen else SurfaceVariant
-    val contentColor = if (isNow) Color.White else OnSurfaceCharcoal
-    Column(
-        modifier = Modifier.width(72.dp).background(bgColor, RoundedCornerShape(14.dp)).padding(vertical = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = timeLabel, fontSize = 11.sp, color = if (isNow) Color(0xFFD4F2E1) else SecondaryText)
-        Spacer(modifier = Modifier.height(10.dp))
-        Icon(getIconForCondition(hour.conditionCode), null, modifier = Modifier.size(24.dp), tint = if (isNow) Color.White else ForestGreen)
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(text = "${hour.temperature?.toInt() ?: "--"}°", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = contentColor)
     }
 }
