@@ -34,16 +34,15 @@ import co.farmpulse.app.presentation.scanner.ScannerScreen
 import co.farmpulse.app.presentation.scanner.ScannerViewModel
 import co.farmpulse.app.presentation.settings.SettingsScreen
 import co.farmpulse.app.presentation.settings.SettingsViewModel
+import co.farmpulse.app.presentation.setup.IntroScreen
 import co.farmpulse.app.presentation.setup.SetupScreen
 import co.farmpulse.app.ui.theme.*
 import co.farmpulse.app.util.SnackbarManager
 import kotlinx.coroutines.flow.collectLatest
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Nav destinations
-// ─────────────────────────────────────────────────────────────────────────────
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
+    object Intro    : Screen("intro",    "Intro",    Icons.Outlined.Info)
     object Setup    : Screen("setup",    "Setup",    Icons.Outlined.Key)
     object Home     : Screen("home",     "Home",     Icons.Outlined.Home)
     object Forecast : Screen("forecast", "Forecast", Icons.Outlined.CalendarMonth)
@@ -56,9 +55,6 @@ private val bottomNavScreens = listOf(
     Screen.Home, Screen.Forecast, Screen.Scanner, Screen.History, Screen.Settings
 )
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MainScreen
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun MainScreen(
@@ -73,6 +69,11 @@ fun MainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val settingsState by settingsViewModel.uiState.collectAsState()
     
+    // We only want to decide the start destination once preferences are loaded
+    if (!settingsState.isInitialized) {
+        return // Or show a splash/loading state
+    }
+
     val isApiKeyMissing = settingsState.apiKey.isBlank()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -91,8 +92,9 @@ fun MainScreen(
         containerColor = BackgroundOffWhite,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            // Only show bottom nav if API key exists and we are not on setup screen
-            if (!isApiKeyMissing && currentRoute != Screen.Setup.route) {
+            // Only show bottom nav if API key exists and we are not on setup or intro screens
+            val hideBottomBar = isApiKeyMissing || currentRoute == Screen.Setup.route || currentRoute == Screen.Intro.route
+            if (!hideBottomBar) {
                 FarmPulseBottomNav(
                     navController = navController,
                     screens = bottomNavScreens
@@ -102,17 +104,25 @@ fun MainScreen(
     ) { innerPadding ->
         NavHost(
             navController  = navController,
-            startDestination = if (isApiKeyMissing) Screen.Setup.route else Screen.Home.route,
+            startDestination = if (isApiKeyMissing) Screen.Intro.route else Screen.Home.route,
             modifier       = Modifier.padding(innerPadding),
             enterTransition = { fadeIn(animationSpec  = tween(150)) },
             exitTransition  = { fadeOut(animationSpec = tween(100)) }
         ) {
+            composable(Screen.Intro.route) {
+                IntroScreen(
+                    onContinue = {
+                        navController.navigate(Screen.Setup.route)
+                    }
+                )
+            }
+
             composable(Screen.Setup.route) {
                 SetupScreen(
                     onSaveApiKey = { key ->
                         settingsViewModel.setApiKey(key)
                         navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Setup.route) { inclusive = true }
+                            popUpTo(Screen.Intro.route) { inclusive = true }
                         }
                     }
                 )
@@ -178,9 +188,6 @@ fun MainScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bottom navigation bar
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun FarmPulseBottomNav(

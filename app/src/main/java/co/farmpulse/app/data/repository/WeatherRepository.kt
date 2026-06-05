@@ -274,16 +274,4 @@ class WeatherRepository @Inject constructor(
             GeoInfo(null, null)
         }
     }
-
-    suspend fun getWeather(): Result<WeatherData> {
-        return getFullWeather().map { meta ->
-            val response = meta.response
-            WeatherData(
-                city = meta.discoveredCity ?: "Unknown",
-                lat = response.location?.lat ?: 0.0,
-                lon = response.location?.lon ?: 0.0,
-                currentTemp = response.current?.temperature ?: 0.0
-            )
-        }
-    }
 }

@@ -114,7 +114,7 @@ class HomeViewModel @Inject constructor(
                     val response = value.response
                     
                     // Display the client-side Geocoded info (exact city and region)
-                    val city = if (prefs.cityOverride.isNotBlank()) prefs.cityOverride else {
+                    val city = prefs.cityOverride.ifBlank {
                         value.discoveredCity ?: "Unknown"
                     }
                     val region = if (prefs.cityOverride.isNotBlank()) "" else {

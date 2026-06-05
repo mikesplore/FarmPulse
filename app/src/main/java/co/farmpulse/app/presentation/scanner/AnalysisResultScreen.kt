@@ -16,14 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.farmpulse.app.domain.model.TreeAnalysisResult
 import co.farmpulse.app.presentation.components.SectionHeading
 import co.farmpulse.app.ui.theme.*
-import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +72,6 @@ fun AnalysisResultScreen(
                     .border(1.dp, Color(0xFFB8DAC5), RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                // In a real app, result.imageUrl would be used here
                 Icon(
                     imageVector = Icons.Outlined.Park,
                     contentDescription = null,

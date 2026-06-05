@@ -43,8 +43,3 @@ data class AiSummaryDto(
     @SerializedName("lang") val lang: String? = null,
     @SerializedName("generated_at") val generatedAt: String? = null
 )
-
-typealias CurrentWeatherResponse = WeatherGeoResponse
-typealias DailyForecastResponse = WeatherGeoResponse
-typealias HourlyForecastResponse = WeatherGeoResponse
-

@@ -39,6 +39,9 @@ data class SettingsUiState(
     val units:        String  = "metric",
     val apiKey:       String  = "",
 
+    // UI State
+    val isInitialized: Boolean = false,
+
     // Location override
     val ipCity:       String? = null,
     val cityOverride: String  = "",
@@ -58,8 +61,8 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        loadUsage()
         observePreferences()
+        loadUsage()
     }
 
     private fun observePreferences() {
@@ -72,7 +75,8 @@ class SettingsViewModel @Inject constructor(
                     cityOverride = prefs.cityOverride,
                     latOverride = prefs.latOverride,
                     lonOverride = prefs.lonOverride,
-                    apiKey = prefs.apiKey
+                    apiKey = prefs.apiKey,
+                    isInitialized = true
                 ) }
             }
         }

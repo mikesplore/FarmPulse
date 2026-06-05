@@ -6,11 +6,9 @@ import co.farmpulse.app.data.local.entities.*
 
 /**
  * Room database for FarmPulse.
- * Version 2: Migrated from JSON blob cache to structured weather tables.
  */
 @Database(
     entities = [
-        CachedWeatherEntity::class,
         CachedTreeAnalysisEntity::class,
         CurrentWeatherEntity::class,
         HourlyForecastEntity::class,

@@ -51,14 +51,13 @@ fun ScannerScreen(
     // Permission state for camera
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     
-    // Media permission state (needed for some older devices or specific storage access, 
-    // though GetContent usually bypasses it, we'll request if needed by custom logic)
+    // Media permission state
     val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_IMAGES
     } else {
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
-    val mediaPermissionState = rememberPermissionState(mediaPermission)
+    rememberPermissionState(mediaPermission)
 
     // Navigate when a result arrives and immediately clear it in the callback
     LaunchedEffect(state.result) {
@@ -220,7 +219,6 @@ fun ScannerScreen(
                     },
                     modifier = Modifier.clickable {
                         if (cameraPermissionState.status.isGranted) {
-                            showBottomSheet = false
                             val uri = viewModel.prepareCameraUri(context)
                             cameraLauncher.launch(uri)
                         } else {
@@ -236,9 +234,7 @@ fun ScannerScreen(
                         Icon(Icons.Outlined.PhotoLibrary, null, tint = ForestGreen) 
                     },
                     modifier = Modifier.clickable {
-                        // GetContent typically doesn't need permissions, but we check if we want to be safe 
-                        // or if we needed to access files directly later.
-                        showBottomSheet = false
+
                         galleryLauncher.launch("image/*")
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)

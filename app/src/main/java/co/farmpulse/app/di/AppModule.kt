@@ -39,7 +39,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FarmPulseDatabase {
         val db = Room.databaseBuilder(context, FarmPulseDatabase::class.java, "farmpulse_db")
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(false)
             .build()
         // Log DB path for debugging
         try {
